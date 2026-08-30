@@ -20,6 +20,12 @@ add_executable(${BINARY_NAME} WIN32
 # that need different build settings.
 apply_standard_settings(${BINARY_NAME})
 
+# runner 里的注释和通道错误消息是中文。/utf-8 同时指定源字符集与执行字符集，
+# 少了它 MSVC 会按系统 ANSI 代码页（简体中文机器上是 936）解析源码：中文注释
+# 触发 C4819（这里 /WX 会把它变成错误），窄字符串字面量也会以 GBK 落进二进制，
+# Dart 侧按 UTF-8 解码通道错误消息就会拿到乱码。
+target_compile_options(${BINARY_NAME} PRIVATE "/utf-8")
+
 # Add preprocessor definitions for the build version.
 target_compile_definitions(${BINARY_NAME} PRIVATE "FLUTTER_VERSION=\"${FLUTTER_VERSION}\"")
 target_compile_definitions(${BINARY_NAME} PRIVATE "FLUTTER_VERSION_MAJOR=${FLUTTER_VERSION_MAJOR}")
