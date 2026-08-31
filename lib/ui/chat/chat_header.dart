@@ -35,10 +35,7 @@ class ChatHeader extends StatelessWidget {
     return Container(
       height: hasMenu ? 48 : 44,
       padding: EdgeInsets.only(left: hasMenu ? 6 : 12, right: 6),
-      decoration: BoxDecoration(
-        color: palette.bg,
-        border: Border(bottom: BorderSide(color: palette.border)),
-      ),
+      color: palette.bg,
       child: Row(
         children: <Widget>[
           if (onOpenSessions != null)

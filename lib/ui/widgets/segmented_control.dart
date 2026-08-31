@@ -85,30 +85,27 @@ class AppSwitch extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
-    return Semantics(
-      toggled: value,
-      child: InkWell(
-        onTap: () => onChanged(!value),
-        borderRadius: BorderRadius.circular(12),
-        child: AnimatedContainer(
+    return InkWell(
+      onTap: () => onChanged(!value),
+      borderRadius: BorderRadius.circular(12),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        width: 36,
+        height: 20,
+        padding: const EdgeInsets.all(2),
+        decoration: BoxDecoration(
+          color: value ? palette.accent : palette.bgRaise2,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: AnimatedAlign(
           duration: const Duration(milliseconds: 140),
-          width: 36,
-          height: 20,
-          padding: const EdgeInsets.all(2),
-          decoration: BoxDecoration(
-            color: value ? palette.accent : palette.bgRaise2,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: AnimatedAlign(
-            duration: const Duration(milliseconds: 140),
-            alignment: value ? Alignment.centerRight : Alignment.centerLeft,
-            child: Container(
-              width: 16,
-              height: 16,
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
-              ),
+          alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+          child: Container(
+            width: 16,
+            height: 16,
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
             ),
           ),
         ),

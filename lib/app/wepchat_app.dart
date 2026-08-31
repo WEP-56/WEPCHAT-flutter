@@ -6,8 +6,10 @@ import '../state/app_settings.dart';
 import '../state/session_store.dart';
 import '../theme/app_theme.dart';
 import '../theme/palette.dart';
+import '../ui/shell/desktop_shell_controller.dart';
 import '../ui/shell/app_shell.dart';
 import '../ui/shell/window_title_bar.dart';
+import 'app_nav.dart';
 
 /// 应用根组件：持有全局状态对象，构建主题与外壳。
 class WepChatApp extends StatefulWidget {
@@ -20,9 +22,12 @@ class WepChatApp extends StatefulWidget {
 class _WepChatAppState extends State<WepChatApp> {
   final AppSettings _settings = AppSettings();
   final SessionStore _sessions = SessionStore();
+  final DesktopShellController _desktopShell = DesktopShellController();
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
 
   @override
   void dispose() {
+    _desktopShell.dispose();
     _sessions.dispose();
     _settings.dispose();
     super.dispose();
@@ -44,6 +49,7 @@ class _WepChatAppState extends State<WepChatApp> {
     return MaterialApp(
       title: 'WePChat',
       debugShowCheckedModeBanner: false,
+      navigatorKey: _navigatorKey,
       theme: light,
       darkTheme: dark,
       themeMode: mode,
@@ -70,12 +76,24 @@ class _WepChatAppState extends State<WepChatApp> {
                   ),
           child: WindowFrame(
             palette: resolved.extension<AppPalette>()!,
+            shellController: _desktopShell,
+            onNewSession: () =>
+                _sessions.createSession(model: _settings.defaultModel),
+            onOpenSettings: _openSettings,
             child: child,
           ),
         );
       },
-      home: const AppShell(),
+      home: AppShell(desktopController: _desktopShell),
     );
+  }
+
+  void _openSettings() {
+    final BuildContext? context = _navigatorKey.currentContext;
+    if (context == null) {
+      throw StateError('桌面标题栏无法访问 Navigator');
+    }
+    AppNav.openSettings(context);
   }
 }
 

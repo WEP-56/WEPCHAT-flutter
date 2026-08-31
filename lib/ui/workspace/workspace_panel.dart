@@ -17,11 +17,19 @@ enum _WorkspaceTab { files, images }
 
 /// 右侧工作区面板：当前会话目录下的文件与图片。
 class WorkspacePanel extends StatefulWidget {
-  const WorkspacePanel({super.key, this.onCollapse, this.collapseIcon});
+  const WorkspacePanel({
+    super.key,
+    this.onCollapse,
+    this.collapseIcon,
+    this.embedded = false,
+  });
 
   /// 宽屏折叠 / 窄屏关闭抽屉；为 null 时不显示该按钮。
   final VoidCallback? onCollapse;
   final IconData? collapseIcon;
+
+  /// 桌面端嵌入内容面时与聊天区同色；抽屉继续使用独立面板色。
+  final bool embedded;
 
   @override
   State<WorkspacePanel> createState() => _WorkspacePanelState();
@@ -36,7 +44,10 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
     final SessionStore store = context.sessions;
 
     return Container(
-      color: palette.bgPanel,
+      // 嵌入桌面内容面时只用轻微色差区分工作区，不画出实体边界。
+      color: widget.embedded
+          ? Color.alphaBlend(palette.bgSide.withValues(alpha: 0.22), palette.bg)
+          : palette.bgPanel,
       child: SafeArea(
         child: ListenableBuilder(
           listenable: Listenable.merge(<Listenable>[store, context.settings]),
@@ -95,9 +106,6 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
     return Container(
       height: 44,
       padding: const EdgeInsets.fromLTRB(12, 0, 6, 0),
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: palette.border)),
-      ),
       child: Row(
         children: <Widget>[
           Text(
@@ -199,9 +207,6 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
     final AppPalette palette = context.palette;
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
-      decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: palette.border)),
-      ),
       child: InkWell(
         onTap: () => showAppToast(context, '打开目录（预览版未接入文件系统）'),
         borderRadius: BorderRadius.circular(8),

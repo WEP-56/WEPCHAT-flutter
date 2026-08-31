@@ -203,12 +203,8 @@ class _SessionListPanelState extends State<SessionListPanel> {
   }
 
   Widget _buildFooter(BuildContext context) {
-    final AppPalette palette = context.palette;
     return Container(
       padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
-      decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: palette.border)),
-      ),
       child: Row(
         children: <Widget>[
           Expanded(

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../platform/window_controls.dart';
 import '../../theme/palette.dart';
+import 'desktop_shell_controller.dart';
 
 /// 自定义标题栏高度（逻辑像素）。
 const double kWindowTitleBarHeight = 34;
@@ -21,10 +22,20 @@ const double _kResizeCornerWidth = 10;
 /// 文件预览等）也在这条标题栏之下。这里不能使用 Tooltip / InkWell —— 它们需要
 /// Overlay 与 Material 祖先，而两者都在 Navigator 内部。
 class WindowFrame extends StatelessWidget {
-  const WindowFrame({super.key, required this.palette, required this.child});
+  const WindowFrame({
+    super.key,
+    required this.palette,
+    required this.shellController,
+    required this.onNewSession,
+    required this.onOpenSettings,
+    required this.child,
+  });
 
   /// 由 `WepChatApp` 解析后传入：builder 位于 Theme 之外，不能用 context.palette。
   final AppPalette palette;
+  final DesktopShellController shellController;
+  final VoidCallback onNewSession;
+  final VoidCallback onOpenSettings;
   final Widget child;
 
   @override
@@ -35,7 +46,12 @@ class WindowFrame extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          WindowTitleBar(palette: palette),
+          WindowTitleBar(
+            palette: palette,
+            shellController: shellController,
+            onNewSession: onNewSession,
+            onOpenSettings: onOpenSettings,
+          ),
           Expanded(child: ClipRect(child: child)),
         ],
       ),
@@ -45,9 +61,18 @@ class WindowFrame extends StatelessWidget {
 
 /// 最小化 / 最大化 / 关闭那一行，外加拖动与顶边调整大小。
 class WindowTitleBar extends StatefulWidget {
-  const WindowTitleBar({super.key, required this.palette});
+  const WindowTitleBar({
+    super.key,
+    required this.palette,
+    required this.shellController,
+    required this.onNewSession,
+    required this.onOpenSettings,
+  });
 
   final AppPalette palette;
+  final DesktopShellController shellController;
+  final VoidCallback onNewSession;
+  final VoidCallback onOpenSettings;
 
   @override
   State<WindowTitleBar> createState() => _WindowTitleBarState();
@@ -88,7 +113,8 @@ class _WindowTitleBarState extends State<WindowTitleBar>
     final AppPalette palette = widget.palette;
     return WindowControls.setFrameAppearance(
       dark: palette.brightness == Brightness.dark,
-      borderRgb: palette.borderStrong.toARGB32(),
+      // DWM 的外框与自绘标题栏同色，避免浅色模式留下深色边线。
+      borderRgb: palette.bgSide.toARGB32(),
     );
   }
 
@@ -128,33 +154,64 @@ class _WindowTitleBarState extends State<WindowTitleBar>
   }
 
   Widget _buildBar(AppPalette palette) {
-    // 与聊天区同色、且不画分隔线：标题栏要看着像窗口的一部分，而不是贴上去的
-    // 一条。窗口自身的边框颜色由 [_syncFrame] 交给 DWM。
+    // 与左侧导航同色：标题栏和导航组成一个连续的外壳，右侧内容面在下方
+    // 用轻微的圆角和明度差自然浮起。窗口自身的边框颜色由 [_syncFrame] 交给 DWM。
     return ColoredBox(
-      color: palette.bg,
-      child: Row(
-        children: <Widget>[
-          Expanded(child: _buildDragArea()),
-          _CaptionButton(
-            icon: Icons.remove,
-            iconSize: 15,
-            palette: palette,
-            onPressed: () => unawaited(WindowControls.minimize()),
-          ),
-          _CaptionButton(
-            icon: _maximized ? Icons.filter_none : Icons.crop_square,
-            iconSize: _maximized ? 11 : 14,
-            palette: palette,
-            onPressed: () => unawaited(_toggleMaximize()),
-          ),
-          _CaptionButton(
-            icon: Icons.close,
-            iconSize: 16,
-            palette: palette,
-            danger: true,
-            onPressed: () => unawaited(WindowControls.close()),
-          ),
-        ],
+      color: palette.bgSide,
+      child: ListenableBuilder(
+        listenable: widget.shellController,
+        builder: (BuildContext context, Widget? _) => Row(
+          children: <Widget>[
+            _ToolbarButton(
+              icon: widget.shellController.leftOpen
+                  ? Icons.menu_open
+                  : Icons.menu,
+              label: '切换会话列表',
+              palette: palette,
+              onPressed: widget.shellController.toggleLeft,
+            ),
+            _ToolbarButton(
+              icon: Icons.add_comment_outlined,
+              label: '新建会话',
+              palette: palette,
+              onPressed: widget.onNewSession,
+            ),
+            Expanded(child: _buildDragArea()),
+            _ToolbarButton(
+              icon: widget.shellController.workspaceOpen
+                  ? Icons.folder_open_outlined
+                  : Icons.folder_outlined,
+              label: '切换工作区',
+              palette: palette,
+              onPressed: widget.shellController.toggleWorkspace,
+            ),
+            _ToolbarButton(
+              icon: Icons.settings_outlined,
+              label: '打开设置',
+              palette: palette,
+              onPressed: widget.onOpenSettings,
+            ),
+            _CaptionButton(
+              icon: Icons.remove,
+              iconSize: 15,
+              palette: palette,
+              onPressed: () => unawaited(WindowControls.minimize()),
+            ),
+            _CaptionButton(
+              icon: _maximized ? Icons.filter_none : Icons.crop_square,
+              iconSize: _maximized ? 11 : 14,
+              palette: palette,
+              onPressed: () => unawaited(_toggleMaximize()),
+            ),
+            _CaptionButton(
+              icon: Icons.close,
+              iconSize: 16,
+              palette: palette,
+              danger: true,
+              onPressed: () => unawaited(WindowControls.close()),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -196,6 +253,49 @@ class _WindowTitleBarState extends State<WindowTitleBar>
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ToolbarButton extends StatefulWidget {
+  const _ToolbarButton({
+    required this.icon,
+    required this.label,
+    required this.palette,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String label;
+  final AppPalette palette;
+  final VoidCallback onPressed;
+
+  @override
+  State<_ToolbarButton> createState() => _ToolbarButtonState();
+}
+
+class _ToolbarButtonState extends State<_ToolbarButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    // WindowFrame 位于 Navigator / Overlay 之上，不能使用 Tooltip；
+    // 标题栏按钮也不加入 Flutter 语义树，避免悬停重建时向 Windows
+    // accessibility bridge 发送短暂失效的节点 ID。
+    return MouseRegion(
+      onEnter: (PointerEnterEvent _) => setState(() => _hovered = true),
+      onExit: (PointerExitEvent _) => setState(() => _hovered = false),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.onPressed,
+        child: Container(
+          width: 38,
+          height: kWindowTitleBarHeight,
+          color: _hovered ? widget.palette.hover : Colors.transparent,
+          alignment: Alignment.center,
+          child: Icon(widget.icon, size: 16, color: widget.palette.text2),
+        ),
       ),
     );
   }

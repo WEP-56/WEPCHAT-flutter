@@ -150,8 +150,11 @@ bool Win32Window::Create(const std::wstring& title,
   UINT dpi = FlutterDesktopGetDpiForMonitor(monitor);
   double scale_factor = dpi / 96.0;
 
+  // 保留系统厚边框（拖拽缩放 / Snap），移除 WS_CAPTION，避免 DWM 在自绘
+  // 标题栏下方继续绘制一条原生 caption 分界线。
+  constexpr DWORD kWindowStyle = WS_OVERLAPPEDWINDOW & ~WS_CAPTION;
   HWND window = CreateWindow(
-      window_class, title.c_str(), WS_OVERLAPPEDWINDOW,
+      window_class, title.c_str(), kWindowStyle,
       Scale(origin.x, scale_factor), Scale(origin.y, scale_factor),
       Scale(size.width, scale_factor), Scale(size.height, scale_factor),
       nullptr, nullptr, GetModuleHandle(nullptr), this);
@@ -160,12 +163,23 @@ bool Win32Window::Create(const std::wstring& title,
     return false;
   }
 
+  // WM_NCCALCSIZE 在创建阶段可能先按系统非客户区规则计算一次。强制发送
+  // FRAMECHANGED，确保自定义标题栏规则在首次显示前生效，
+  // 避免启动时短暂出现系统标题栏，直到第一次交互才消失。
+  SetWindowPos(window, nullptr, 0, 0, 0, 0,
+               SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE |
+                   SWP_FRAMECHANGED);
   UpdateTheme(window);
 
   return OnCreate();
 }
 
 bool Win32Window::Show() {
+  // Flutter 首帧显示前再刷新一次，覆盖 DWM / DPI 初始化期间可能发生的
+  // 非客户区重算。
+  SetWindowPos(window_handle_, nullptr, 0, 0, 0, 0,
+               SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE |
+                   SWP_FRAMECHANGED);
   return ShowWindow(window_handle_, SW_SHOWNORMAL);
 }
 
