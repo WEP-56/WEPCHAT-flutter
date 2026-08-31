@@ -30,9 +30,9 @@ class FileViewerScreen extends StatelessWidget {
       appBar: AppBar(
         toolbarHeight: 50,
         titleSpacing: 4,
-        backgroundColor: palette.bg,
+        backgroundColor: palette.bgSide,
         surfaceTintColor: Colors.transparent,
-        shape: Border(bottom: BorderSide(color: palette.border)),
+        scrolledUnderElevation: 0,
         title: Row(
           children: <Widget>[
             FileIconBox(kind: kind, size: 24, radius: 6),

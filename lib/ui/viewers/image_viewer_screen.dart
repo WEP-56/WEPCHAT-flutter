@@ -45,9 +45,9 @@ class _ImageViewerScreenState extends State<ImageViewerScreen> {
       appBar: AppBar(
         toolbarHeight: 50,
         titleSpacing: 4,
-        backgroundColor: palette.bg,
+        backgroundColor: palette.bgSide,
         surfaceTintColor: Colors.transparent,
-        shape: Border(bottom: BorderSide(color: palette.border)),
+        scrolledUnderElevation: 0,
         title: Text(
           current,
           maxLines: 1,
@@ -91,9 +91,7 @@ class _ImageViewerScreenState extends State<ImageViewerScreen> {
             if (multiple)
               Container(
                 padding: const EdgeInsets.symmetric(vertical: 8),
-                decoration: BoxDecoration(
-                  border: Border(top: BorderSide(color: palette.border)),
-                ),
+                // 上方图片台是 bgSide，这条操作栏用 Scaffold 的 bg，靠色差分开。
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: <Widget>[

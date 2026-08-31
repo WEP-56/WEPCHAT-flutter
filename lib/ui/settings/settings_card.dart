@@ -23,8 +23,8 @@ class SettingsCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       decoration: BoxDecoration(
+        // 卡片靠填充色和内容面（bg）的色差浮起，不再描边。
         color: palette.bgPanel,
-        border: Border.all(color: palette.border),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(

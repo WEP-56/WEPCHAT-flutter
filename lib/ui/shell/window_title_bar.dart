@@ -8,7 +8,10 @@ import '../../theme/palette.dart';
 import 'desktop_shell_controller.dart';
 
 /// 自定义标题栏高度（逻辑像素）。
-const double kWindowTitleBarHeight = 34;
+///
+/// 比 Windows 原生标题栏（32）再窄一点：这条栏只放图标按钮，不显示标题文字，
+/// 空间留给下方内容。顶边还要留 [_kResizeStripHeight] 给调整大小，不宜再压。
+const double kWindowTitleBarHeight = 28;
 
 /// 顶边可拖拽调整的厚度。
 const double _kResizeStripHeight = 4;
@@ -43,17 +46,27 @@ class WindowFrame extends StatelessWidget {
     if (!WindowControls.isSupported) return child;
     return Directionality(
       textDirection: TextDirection.ltr,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          WindowTitleBar(
-            palette: palette,
-            shellController: shellController,
-            onNewSession: onNewSession,
-            onOpenSettings: onOpenSettings,
-          ),
-          Expanded(child: ClipRect(child: child)),
-        ],
+      // 整个窗口先垫一层不透明底色，再往上叠标题栏和内容。
+      //
+      // Flutter 的根画布每帧都清成透明黑，而 Windows 的窗口本身不做逐像素透明，
+      // 所以任何没被 widget 完全覆盖的像素最终显示为黑色。标题栏高度换算成物理
+      // 像素后若落在半个像素上（125% / 175% 缩放），交界那一行只被覆盖一半
+      // （drawRect 默认抗锯齿），剩下一半透出根画布的黑，就会看到一条细黑线。
+      // 垫上与标题栏同色的底之后，这一行混出来仍是同一片颜色，接缝不会出现。
+      child: ColoredBox(
+        color: palette.bgSide,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            WindowTitleBar(
+              palette: palette,
+              shellController: shellController,
+              onNewSession: onNewSession,
+              onOpenSettings: onOpenSettings,
+            ),
+            Expanded(child: ClipRect(child: child)),
+          ],
+        ),
       ),
     );
   }
@@ -193,19 +206,19 @@ class _WindowTitleBarState extends State<WindowTitleBar>
             ),
             _CaptionButton(
               icon: Icons.remove,
-              iconSize: 15,
+              iconSize: 14,
               palette: palette,
               onPressed: () => unawaited(WindowControls.minimize()),
             ),
             _CaptionButton(
               icon: _maximized ? Icons.filter_none : Icons.crop_square,
-              iconSize: _maximized ? 11 : 14,
+              iconSize: _maximized ? 10 : 13,
               palette: palette,
               onPressed: () => unawaited(_toggleMaximize()),
             ),
             _CaptionButton(
               icon: Icons.close,
-              iconSize: 16,
+              iconSize: 15,
               palette: palette,
               danger: true,
               onPressed: () => unawaited(WindowControls.close()),
@@ -290,11 +303,11 @@ class _ToolbarButtonState extends State<_ToolbarButton> {
         behavior: HitTestBehavior.opaque,
         onTap: widget.onPressed,
         child: Container(
-          width: 38,
+          width: 34,
           height: kWindowTitleBarHeight,
           color: _hovered ? widget.palette.hover : Colors.transparent,
           alignment: Alignment.center,
-          child: Icon(widget.icon, size: 16, color: widget.palette.text2),
+          child: Icon(widget.icon, size: 15, color: widget.palette.text2),
         ),
       ),
     );
@@ -322,7 +335,7 @@ class _ResizeHandle extends StatelessWidget {
   }
 }
 
-/// 单个窗口按钮。尺寸与配色贴近 Windows 原生标题栏：46×34，关闭键悬停变红。
+/// 单个窗口按钮。配色贴近 Windows 原生标题栏：40×28，关闭键悬停变红。
 class _CaptionButton extends StatefulWidget {
   const _CaptionButton({
     required this.icon,
@@ -364,7 +377,7 @@ class _CaptionButtonState extends State<_CaptionButton> {
         behavior: HitTestBehavior.opaque,
         onTap: widget.onPressed,
         child: Container(
-          width: 46,
+          width: 40,
           height: kWindowTitleBarHeight,
           color: background,
           alignment: Alignment.center,

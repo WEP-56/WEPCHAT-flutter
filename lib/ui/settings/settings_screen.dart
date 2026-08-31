@@ -87,12 +87,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final bool compact = isCompact(context);
 
     return Scaffold(
-      backgroundColor: palette.bg,
+      // 顶栏和左侧导航共用外壳色，内容面在下方用色差和圆角浮起 —— 和
+      // ExpandedShell 是同一套结构，从会话页进设置时外壳看起来是连续的。
+      backgroundColor: palette.bgSide,
       appBar: AppBar(
         toolbarHeight: 50,
-        backgroundColor: palette.bg,
+        backgroundColor: palette.bgSide,
         surfaceTintColor: Colors.transparent,
-        shape: Border(bottom: BorderSide(color: palette.border)),
+        // 内容滚动到顶栏下面时不加高程：M3 默认会叠一层色调，看着像多了条边界。
+        scrolledUnderElevation: 0,
         title: Text(
           '设置',
           style: TextStyle(
@@ -104,12 +107,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       body: SafeArea(
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            if (!compact) ...<Widget>[
-              _buildNav(palette),
-              Container(width: 1, color: palette.border),
-            ],
-            Expanded(child: _buildContent(compact)),
+            if (!compact) _buildNav(palette),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(16),
+                    topRight: Radius.circular(16),
+                  ),
+                  child: ColoredBox(
+                    color: palette.bg,
+                    child: _buildContent(compact),
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -167,30 +182,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  /// 内容区滚动。
+  ///
+  /// 用 [SingleChildScrollView] 而不是只有一个 child 的 ListView：ListView 会给
+  /// 每个 item 套一层 `IndexedSemantics`，把整页合并成一个语义节点，页内多个
+  /// Tooltip 的 OverlayPortal 锚点也被并进去 —— 上游 flutter#182444 在这种情况下
+  /// 只保留第一个锚点的遍历标识，剩下的悬浮层节点没了父节点，Windows 的
+  /// accessibility bridge 于是在滚动时不停报 `Failed to update ui::AXTree`。
+  /// 这里的分区是一次性全建出来的，本来也不需要懒加载。
   Widget _buildContent(bool compact) {
-    return ListView(
+    return SingleChildScrollView(
       controller: _scroll,
       padding: EdgeInsets.symmetric(
         horizontal: compact ? 12 : 20,
         vertical: 16,
       ),
-      children: <Widget>[
-        Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 760),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: _kSections.map((_SectionSpec spec) {
-                return Padding(
-                  key: _anchors[spec.id],
-                  padding: const EdgeInsets.only(bottom: 14),
-                  child: _sectionFor(spec.id),
-                );
-              }).toList(),
-            ),
+      // 竖向滚动里高度是无界的，Center 会按内容高度收缩，只负责水平居中。
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 760),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: _kSections.map((_SectionSpec spec) {
+              return Padding(
+                key: _anchors[spec.id],
+                padding: const EdgeInsets.only(bottom: 14),
+                child: _sectionFor(spec.id),
+              );
+            }).toList(),
           ),
         ),
-      ],
+      ),
     );
   }
 

@@ -116,6 +116,12 @@ class _ChatViewState extends State<ChatView> {
         horizontal: compact ? 14 : 20,
         vertical: 18,
       ),
+      // 不给 item 加语义索引：`IndexedSemantics` 会把一条消息合并成一个语义节点，
+      // 连带并进它里面多个 Tooltip 的 OverlayPortal 锚点（图片卡片的「导出 / 查看」、
+      // 多个代码块的「复制代码」）。上游 flutter#182444 在这种情况下只保留第一个
+      // 锚点的遍历标识，Windows 的 accessibility bridge 于是在滚动时不停报
+      // `Failed to update ui::AXTree`。消息列表要保持懒加载，只能关掉索引。
+      addSemanticIndexes: false,
       itemCount: session.messages.length,
       separatorBuilder: (BuildContext _, int _) => const SizedBox(height: 22),
       itemBuilder: (BuildContext context, int index) {

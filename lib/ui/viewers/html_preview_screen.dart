@@ -39,9 +39,9 @@ class _HtmlPreviewScreenState extends State<HtmlPreviewScreen> {
       appBar: AppBar(
         toolbarHeight: 50,
         titleSpacing: 4,
-        backgroundColor: palette.bg,
+        backgroundColor: palette.bgSide,
         surfaceTintColor: Colors.transparent,
-        shape: Border(bottom: BorderSide(color: palette.border)),
+        scrolledUnderElevation: 0,
         title: Row(
           children: <Widget>[
             Expanded(
@@ -190,10 +190,8 @@ class _HtmlPreviewScreenState extends State<HtmlPreviewScreen> {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: palette.bgSide,
-        border: Border(top: BorderSide(color: palette.border)),
-      ),
+      // 正文是 bg，这条说明用 bgSide，靠色差分开，不画分割线。
+      color: palette.bgSide,
       child: Text(
         '预览版用原生控件模拟页面渲染；正式版会在沙盒 WebView 中加载真实 HTML。',
         style: TextStyle(fontSize: 10.5, color: palette.text3),
