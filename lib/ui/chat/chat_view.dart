@@ -13,11 +13,19 @@ import 'message_item.dart';
 
 /// 中间聊天栏：顶栏 + 消息流 + 输入区。
 class ChatView extends StatefulWidget {
-  const ChatView({super.key, this.onOpenSessions, this.onOpenWorkspace});
+  const ChatView({
+    super.key,
+    this.onOpenSessions,
+    this.onToggleWorkspace,
+    this.workspaceOpen = false,
+  });
 
-  /// 窄屏外壳传入，用于打开左右抽屉；宽屏为 null。
+  /// 窄屏外壳传入，用于打开左抽屉；宽屏为 null。
   final VoidCallback? onOpenSessions;
-  final VoidCallback? onOpenWorkspace;
+
+  /// 工作区开关：窄屏开右抽屉，宽屏收起 / 展开右栏。
+  final VoidCallback? onToggleWorkspace;
+  final bool workspaceOpen;
 
   @override
   State<ChatView> createState() => _ChatViewState();
@@ -75,7 +83,8 @@ class _ChatViewState extends State<ChatView> {
               ChatHeader(
                 session: session,
                 onOpenSessions: widget.onOpenSessions,
-                onOpenWorkspace: widget.onOpenWorkspace,
+                onToggleWorkspace: widget.onToggleWorkspace,
+                workspaceOpen: widget.workspaceOpen,
               ),
               Expanded(
                 child: session.messages.isEmpty

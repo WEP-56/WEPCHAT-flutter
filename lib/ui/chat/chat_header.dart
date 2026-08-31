@@ -8,30 +8,33 @@ import '../../state/app_scope.dart';
 import '../../theme/palette.dart';
 import '../widgets/controls.dart';
 
-/// 聊天区顶栏：会话标题、模型选择、会话操作。
+/// 聊天区顶栏：会话标题、模型选择、会话操作、工作区开关。
 ///
-/// [onOpenSessions] / [onOpenWorkspace] 只在窄屏外壳里传入（打开抽屉），
-/// 宽屏三栏布局下两侧面板常驻，传 null 即可隐藏对应按钮。
+/// [onOpenSessions] 只在窄屏外壳里传入（打开抽屉），宽屏左栏常驻，传 null 即可
+/// 隐藏该按钮。[onToggleWorkspace] 两种外壳都会传：窄屏打开右抽屉，宽屏收起 /
+/// 展开右栏，[workspaceOpen] 决定按钮显示的是「展开」还是「收起」。
 class ChatHeader extends StatelessWidget {
   const ChatHeader({
     super.key,
     required this.session,
     this.onOpenSessions,
-    this.onOpenWorkspace,
+    this.onToggleWorkspace,
+    this.workspaceOpen = false,
   });
 
   final ChatSession session;
   final VoidCallback? onOpenSessions;
-  final VoidCallback? onOpenWorkspace;
+  final VoidCallback? onToggleWorkspace;
+  final bool workspaceOpen;
 
   @override
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
-    final bool hasDrawers = onOpenSessions != null || onOpenWorkspace != null;
+    final bool hasMenu = onOpenSessions != null;
 
     return Container(
-      height: hasDrawers ? 48 : 44,
-      padding: EdgeInsets.symmetric(horizontal: hasDrawers ? 6 : 12),
+      height: hasMenu ? 48 : 44,
+      padding: EdgeInsets.only(left: hasMenu ? 6 : 12, right: 6),
       decoration: BoxDecoration(
         color: palette.bg,
         border: Border(bottom: BorderSide(color: palette.border)),
@@ -63,11 +66,11 @@ class ChatHeader extends StatelessWidget {
           _ModelPicker(session: session),
           const SizedBox(width: 2),
           _SessionMenu(session: session),
-          if (onOpenWorkspace != null)
+          if (onToggleWorkspace != null)
             IconAction(
-              icon: Icons.folder_outlined,
-              tooltip: '工作区',
-              onTap: onOpenWorkspace!,
+              icon: workspaceOpen ? Icons.chevron_right : Icons.folder_outlined,
+              tooltip: workspaceOpen ? '收起工作区' : '展开工作区',
+              onTap: onToggleWorkspace!,
               box: 36,
             ),
         ],

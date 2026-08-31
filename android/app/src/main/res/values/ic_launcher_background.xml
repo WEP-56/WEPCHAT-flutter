@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 自适应图标的背景色，取自 logo.png 的底色。 -->
+<resources>
+    <color name="ic_launcher_background">#050607</color>
+</resources>

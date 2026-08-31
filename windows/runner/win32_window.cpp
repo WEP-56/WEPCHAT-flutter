@@ -16,6 +16,14 @@ namespace {
 #define DWMWA_USE_IMMERSIVE_DARK_MODE 20
 #endif
 
+/// Window attribute that sets the color of the 1px outer window frame.
+///
+/// Only supported on Windows 11 (build 22000) and later; older systems answer
+/// E_INVALIDARG and keep the default frame color, which is harmless.
+#ifndef DWMWA_BORDER_COLOR
+#define DWMWA_BORDER_COLOR 34
+#endif
+
 constexpr const wchar_t kWindowClassName[] = L"FLUTTER_RUNNER_WIN32_WINDOW";
 
 /// Registry key for app theme preference.
@@ -301,16 +309,37 @@ void Win32Window::OnDestroy() {
 }
 
 void Win32Window::UpdateTheme(HWND const window) {
-  DWORD light_mode;
-  DWORD light_mode_size = sizeof(light_mode);
-  LSTATUS result = RegGetValue(HKEY_CURRENT_USER, kGetPreferredBrightnessRegKey,
-                               kGetPreferredBrightnessRegValue,
-                               RRF_RT_REG_DWORD, nullptr, &light_mode,
-                               &light_mode_size);
+  BOOL enable_dark_mode = FALSE;
+  if (frame_appearance_) {
+    enable_dark_mode = frame_appearance_->dark ? TRUE : FALSE;
+  } else {
+    // 应用还没报告主题（启动到第一帧之间）时跟随系统，避免窗口边框先闪一下
+    // 相反的配色。
+    DWORD light_mode;
+    DWORD light_mode_size = sizeof(light_mode);
+    LSTATUS result = RegGetValue(HKEY_CURRENT_USER,
+                                 kGetPreferredBrightnessRegKey,
+                                 kGetPreferredBrightnessRegValue,
+                                 RRF_RT_REG_DWORD, nullptr, &light_mode,
+                                 &light_mode_size);
+    if (result != ERROR_SUCCESS) {
+      return;
+    }
+    enable_dark_mode = light_mode == 0;
+  }
 
-  if (result == ERROR_SUCCESS) {
-    BOOL enable_dark_mode = light_mode == 0;
-    DwmSetWindowAttribute(window, DWMWA_USE_IMMERSIVE_DARK_MODE,
-                          &enable_dark_mode, sizeof(enable_dark_mode));
+  DwmSetWindowAttribute(window, DWMWA_USE_IMMERSIVE_DARK_MODE,
+                        &enable_dark_mode, sizeof(enable_dark_mode));
+
+  if (frame_appearance_) {
+    COLORREF border = frame_appearance_->border;
+    DwmSetWindowAttribute(window, DWMWA_BORDER_COLOR, &border, sizeof(border));
+  }
+}
+
+void Win32Window::SetFrameAppearance(bool dark, COLORREF border) {
+  frame_appearance_ = FrameAppearance{dark, border};
+  if (window_handle_ != nullptr) {
+    UpdateTheme(window_handle_);
   }
 }

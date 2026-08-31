@@ -5,6 +5,7 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 
 // A class abstraction for a high DPI-aware Win32 Window. Intended to be
@@ -55,6 +56,12 @@ class Win32Window {
   // Return a RECT representing the bounds of the current client area.
   RECT GetClientArea();
 
+  // Lets the app decide how the window frame is drawn, instead of following the
+  // system theme: |dark| picks the immersive dark/light decorations and |border|
+  // is the color of the 1px outer frame line. Called from the Dart side so the
+  // frame always matches the in-app palette; takes effect immediately.
+  void SetFrameAppearance(bool dark, COLORREF border);
+
  protected:
   // Processes and route salient window messages for mouse handling,
   // size change and DPI. Delegates handling of these to member overloads that
@@ -87,8 +94,17 @@ class Win32Window {
   // Retrieves a class instance pointer for |window|
   static Win32Window* GetThisFromHandle(HWND const window) noexcept;
 
-  // Update the window frame's theme to match the system theme.
-  static void UpdateTheme(HWND const window);
+  // Update the window frame's theme: the appearance set by
+  // |SetFrameAppearance| when the app has provided one, the system theme
+  // otherwise.
+  void UpdateTheme(HWND const window);
+
+  // Frame colors requested by the app, empty until the Dart side reports them.
+  struct FrameAppearance {
+    bool dark;
+    COLORREF border;
+  };
+  std::optional<FrameAppearance> frame_appearance_;
 
   bool quit_on_close_ = false;
 

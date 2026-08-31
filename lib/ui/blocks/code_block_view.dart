@@ -43,27 +43,39 @@ class CodeBlockView extends StatelessWidget {
               color: palette.bgRaise.withValues(alpha: 0.7),
               child: Row(
                 children: <Widget>[
-                  Text(
-                    block.lang,
-                    style: TextStyle(
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.4,
-                      color: palette.text3,
+                  // 语言标签与文件名放进 Expanded，剩余宽度全部归它，行数与复制
+                  // 按钮才会贴在右边。不能写成 Flexible(文件名) + Spacer()：
+                  // 两者 flex 都是 1，会平分剩余空间，而松约束的 Flexible 用不完
+                  // 自己那一半，行尾就会空出一段（这正是之前按钮不靠右的原因）。
+                  Expanded(
+                    child: Row(
+                      children: <Widget>[
+                        Text(
+                          block.lang,
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.4,
+                            color: palette.text3,
+                          ),
+                        ),
+                        if (block.title != null) ...<Widget>[
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              block.title!,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppFonts.mono(
+                                size: 11,
+                                color: palette.text2,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
-                  if (block.title != null) ...<Widget>[
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        block.title!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppFonts.mono(size: 11, color: palette.text2),
-                      ),
-                    ),
-                  ],
-                  const Spacer(),
                   Text(
                     '$lines 行',
                     style: TextStyle(fontSize: 10.5, color: palette.text3),

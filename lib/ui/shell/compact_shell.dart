@@ -50,7 +50,7 @@ class _CompactShellState extends State<CompactShell> {
       body: SafeArea(
         child: ChatView(
           onOpenSessions: () => _scaffold.currentState?.openDrawer(),
-          onOpenWorkspace: () => _scaffold.currentState?.openEndDrawer(),
+          onToggleWorkspace: () => _scaffold.currentState?.openEndDrawer(),
         ),
       ),
     );

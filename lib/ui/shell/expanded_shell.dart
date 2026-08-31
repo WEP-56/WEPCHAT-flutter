@@ -78,31 +78,17 @@ class _ExpandedShellState extends State<ExpandedShell> {
             _ResizeHandle(onDelta: _resizeLeft)
           else
             _Divider(color: palette.border),
-          const Expanded(child: ChatView()),
-          if (_rightOpen)
-            _ResizeHandle(onDelta: _resizeRight)
-          else
-            _Divider(color: palette.border),
-          if (_rightOpen)
-            SizedBox(
-              width: _rightWidth,
-              child: WorkspacePanel(
-                onCollapse: () => setState(() => _rightOpen = false),
-                collapseIcon: Icons.chevron_right,
-              ),
-            )
-          else
-            _Rail(
-              width: _kRailWidth,
-              color: palette.bgPanel,
-              children: <Widget>[
-                IconAction(
-                  icon: Icons.chevron_left,
-                  tooltip: '展开工作区',
-                  onTap: () => setState(() => _rightOpen = true),
-                ),
-              ],
+          Expanded(
+            child: ChatView(
+              workspaceOpen: _rightOpen,
+              onToggleWorkspace: () => setState(() => _rightOpen = !_rightOpen),
             ),
+          ),
+          // 右栏收起后整条都不留：开关已经放到聊天顶栏，不需要占一条窄轨。
+          if (_rightOpen) ...<Widget>[
+            _ResizeHandle(onDelta: _resizeRight),
+            SizedBox(width: _rightWidth, child: const WorkspacePanel()),
+          ],
         ],
       ),
     );

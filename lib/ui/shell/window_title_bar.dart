@@ -62,12 +62,34 @@ class _WindowTitleBarState extends State<WindowTitleBar>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     unawaited(_syncMaximized());
+    unawaited(_syncFrame());
+  }
+
+  @override
+  void didUpdateWidget(WindowTitleBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final AppPalette old = oldWidget.palette;
+    final AppPalette now = widget.palette;
+    if (old.brightness != now.brightness ||
+        old.borderStrong != now.borderStrong) {
+      unawaited(_syncFrame());
+    }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  /// 把窗口边框交给应用主题：runner 默认跟随系统注册表的深浅色，系统深色而应用
+  /// 浅色时四周会留一圈近黑的线，看着像标题栏与窗体裂开。
+  Future<void> _syncFrame() {
+    final AppPalette palette = widget.palette;
+    return WindowControls.setFrameAppearance(
+      dark: palette.brightness == Brightness.dark,
+      borderRgb: palette.borderStrong.toARGB32(),
+    );
   }
 
   /// 最大化状态也可能由系统改变（Win+↑、贴靠、任务栏菜单），这些都会带来一次
@@ -106,14 +128,13 @@ class _WindowTitleBarState extends State<WindowTitleBar>
   }
 
   Widget _buildBar(AppPalette palette) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: palette.bgSide,
-        border: Border(bottom: BorderSide(color: palette.border)),
-      ),
+    // 与聊天区同色、且不画分隔线：标题栏要看着像窗口的一部分，而不是贴上去的
+    // 一条。窗口自身的边框颜色由 [_syncFrame] 交给 DWM。
+    return ColoredBox(
+      color: palette.bg,
       child: Row(
         children: <Widget>[
-          Expanded(child: _buildDragArea(palette)),
+          Expanded(child: _buildDragArea()),
           _CaptionButton(
             icon: Icons.remove,
             iconSize: 15,
@@ -140,29 +161,12 @@ class _WindowTitleBarState extends State<WindowTitleBar>
 
   /// 拖动用 onPanStart 而不是 onPointerDown：这样双击最大化仍然能识别，
   /// 鼠标的 pan 判定阈值只有 1 逻辑像素，手感上仍是「按下即拖」。
-  Widget _buildDragArea(AppPalette palette) {
+  Widget _buildDragArea() {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onDoubleTap: () => unawaited(_toggleMaximize()),
       onPanStart: (DragStartDetails _) => unawaited(WindowControls.startDrag()),
-      child: Padding(
-        padding: const EdgeInsets.only(left: 12),
-        child: Row(
-          children: <Widget>[
-            Icon(Icons.forum_outlined, size: 14, color: palette.accent),
-            const SizedBox(width: 8),
-            Text(
-              'WePChat',
-              style: TextStyle(
-                fontSize: 11.5,
-                fontWeight: FontWeight.w500,
-                letterSpacing: 0.2,
-                color: palette.text2,
-              ),
-            ),
-          ],
-        ),
-      ),
+      child: const SizedBox.expand(),
     );
   }
 

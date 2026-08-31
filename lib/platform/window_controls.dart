@@ -35,6 +35,22 @@ abstract final class WindowControls {
   static Future<void> startResize(WindowEdge edge) =>
       _invoke('startResize', edge.name);
 
+  /// 让窗口边框跟着应用主题走。
+  ///
+  /// runner 默认按系统注册表里的深浅色设置 DWM 边框，于是「系统深色 + 应用浅色」
+  /// 时窗口四周会留一圈近黑的细线，和自绘标题栏割裂。[dark] 决定 DWM 用深色还是
+  /// 浅色装饰，[borderRgb] 是 `0xRRGGBB` 形式的边框颜色（不带 alpha：标准编解码
+  /// 器会把 ≥ 2^31 的整数编成 int64，原生侧读 int32 会失败）。
+  static Future<void> setFrameAppearance({
+    required bool dark,
+    required int borderRgb,
+  }) {
+    return _invoke('setFrameAppearance', <String, Object>{
+      'dark': dark,
+      'border': borderRgb & 0xFFFFFF,
+    });
+  }
+
   static Future<void> _invoke(String method, [Object? arguments]) async {
     _checkSupported(method);
     await _channel.invokeMethod<void>(method, arguments);

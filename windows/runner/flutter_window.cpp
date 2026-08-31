@@ -1,5 +1,6 @@
 #include "flutter_window.h"
 
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <utility>
@@ -10,6 +11,18 @@
 namespace {
 
 constexpr const char kWindowChannel[] = "wepchat/window";
+
+// Reads |key| out of a standard-codec argument map. Returns nullptr when the
+// key is missing or carries another type, so callers can reject bad arguments
+// instead of silently substituting a default.
+template <typename T>
+const T* Lookup(const flutter::EncodableMap& map, const char* key) {
+  const auto it = map.find(flutter::EncodableValue(key));
+  if (it == map.end()) {
+    return nullptr;
+  }
+  return std::get_if<T>(&it->second);
+}
 
 }  // namespace
 
@@ -125,6 +138,23 @@ void FlutterWindow::HandleWindowMethodCall(
     result->Success();
     ReleaseCapture();
     SendMessage(hwnd, WM_NCLBUTTONDOWN, hit_test, 0);
+    return;
+  }
+
+  if (method == "setFrameAppearance") {
+    const auto* args = std::get_if<flutter::EncodableMap>(call.arguments());
+    const bool* dark = args == nullptr ? nullptr : Lookup<bool>(*args, "dark");
+    const int32_t* border =
+        args == nullptr ? nullptr : Lookup<int32_t>(*args, "border");
+    if (dark == nullptr || border == nullptr) {
+      result->Error("bad_arguments",
+                    "setFrameAppearance 需要 dark(bool) 与 border(int) 两个参数");
+      return;
+    }
+    // Dart 侧传的是 0xRRGGBB，COLORREF 是 0x00BBGGRR，这里换一下字节序。
+    SetFrameAppearance(*dark, RGB((*border >> 16) & 0xFF, (*border >> 8) & 0xFF,
+                                  *border & 0xFF));
+    result->Success();
     return;
   }
 
