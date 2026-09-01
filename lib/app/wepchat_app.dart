@@ -9,27 +9,33 @@ import '../theme/palette.dart';
 import '../ui/shell/desktop_shell_controller.dart';
 import '../ui/shell/app_shell.dart';
 import '../ui/shell/window_title_bar.dart';
+import 'app_bootstrap.dart';
 import 'app_nav.dart';
 
 /// 应用根组件：持有全局状态对象，构建主题与外壳。
 class WepChatApp extends StatefulWidget {
-  const WepChatApp({super.key});
+  const WepChatApp({required this.bootstrap, super.key});
+
+  final AppBootstrap bootstrap;
 
   @override
   State<WepChatApp> createState() => _WepChatAppState();
 }
 
 class _WepChatAppState extends State<WepChatApp> {
-  final AppSettings _settings = AppSettings();
-  final SessionStore _sessions = SessionStore();
+  // 两者都由 bootstrap 创建：会话列表要在首帧之前装载完
+  // （见 `AppBootstrap.init`），设置对象要和它一起交给同一个 scope。
+  AppSettings get _settings => widget.bootstrap.settings;
+  SessionStore get _sessions => widget.bootstrap.sessions;
+
   final DesktopShellController _desktopShell = DesktopShellController();
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
 
   @override
   void dispose() {
     _desktopShell.dispose();
-    _sessions.dispose();
-    _settings.dispose();
+    // settings / sessions / storage 归 bootstrap，由它按相反顺序拆。
+    widget.bootstrap.dispose();
     super.dispose();
   }
 

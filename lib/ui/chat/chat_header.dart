@@ -216,7 +216,7 @@ class _SessionMenu extends StatelessWidget {
     );
     controller.dispose();
     if (title == null || !context.mounted) return;
-    context.sessions.renameSession(session.id, title);
+    await context.sessions.renameSession(session.id, title);
   }
 
   Future<void> _confirmDelete(BuildContext context) async {
@@ -241,7 +241,7 @@ class _SessionMenu extends StatelessWidget {
       ),
     );
     if (confirmed != true || !context.mounted) return;
-    context.sessions.deleteSession(
+    await context.sessions.deleteSession(
       session.id,
       fallbackModel: context.settings.defaultModel,
     );

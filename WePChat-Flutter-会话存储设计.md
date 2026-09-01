@@ -1,6 +1,5 @@
 # WePChat 会话存储设计
 
-状态：设计初稿，待用户确认后再进入实现
 
 适用平台：Android、Windows
 

@@ -10,6 +10,27 @@ dependencies:
   flutter:
     sdk: flutter
 
+  # M0 存储层（实施 TODO §2）。每一项的平台影响：
+  #   sqlite3               纯 Dart FFI 绑定，无平台产物
+  #   sqlite3_flutter_libs  打包 Android .so（四个 ABI）与 Windows sqlite3.dll
+  #   path_provider         App 私有目录 / AppData，官方 plugin
+  #   crypto                纯 Dart，blob 的 sha256
+  # Android 真机与 Windows Release 打包验证见交付说明的"未验证事项"。
+  #   path                  纯 Dart 路径拼接与规范化，M2 的工作区越界检测也用它
+  sqlite3: ^2.4.0
+  sqlite3_flutter_libs: ^0.5.24
+  path_provider: ^2.1.4
+  crypto: ^3.0.5
+  path: ^1.9.0
+
+  # M1 网络层（实施 TODO §2）。
+  #   http  官方维护的纯 Dart HTTP 客户端，无平台产物。
+  #         选它而不是 dio：只需要 streamed response + 主动 abort 两件事，
+  #         `Client.send()` 返回 `StreamedResponse`、`Client.close()` 中断流，
+  #         都已满足（§3-2 要求取消能一路传到 HTTP 层）。
+  #         不引 SSE 封装包——解析器自己写（§4-4），第三方类型不进领域层。
+  http: ^1.2.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
