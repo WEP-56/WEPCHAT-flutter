@@ -49,14 +49,9 @@ const List<SearchBackendSpec> kSearchBackends = <SearchBackendSpec>[
     name: 'Tavily',
     desc: '面向 LLM 的搜索 API，返回摘要与来源',
   ),
-  SearchBackendSpec(id: 'brave', name: 'Brave Search', desc: '独立索引，需要单独申请 Key'),
-  SearchBackendSpec(id: 'searxng', name: 'SearXNG', desc: '自建实例，填写实例地址即可'),
-  SearchBackendSpec(id: 'openai', name: 'OpenAI 原生搜索', desc: '复用聊天 Key，按供应商计费'),
-  SearchBackendSpec(
-    id: 'anthropic',
-    name: 'Anthropic 原生搜索',
-    desc: '复用聊天 Key，返回引用块',
-  ),
+  SearchBackendSpec(id: 'exa', name: 'Exa', desc: '语义搜索与网页内容提取'),
+  SearchBackendSpec(id: 'serper', name: 'Serper', desc: 'Google 搜索结果 API'),
+  SearchBackendSpec(id: 'searxng', name: 'SearXNG（自建）', desc: '自建实例，无需第三方 Key'),
 ];
 
 const List<MemoryEntry> kMemoryEntries = <MemoryEntry>[

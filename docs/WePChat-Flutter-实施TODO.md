@@ -269,10 +269,10 @@ abstract class WepTool {
 
 - [ ] 7-13 M2 工作区路径基础设施：规范化、`..` 逃逸检测、符号链接、Windows 的 `\\?\` 与保留名（`CON`、`NUL`）、大小写不敏感。**只在这一层实现，各工具不重复写**（`../AGENTS.md` §6.1）。
 - [ ] 7-14 M2 `list_dir` / `search_files` / `read_file` / `write_file` / `edit_file` / `delete_file`。edit 参考 pi：BOM 剥离、行尾探测（CRLF/LF）与还原、匹配不到就报错**绝不猜**、写入过 mutation 队列串行化。
-- [ ] 7-15 M4 `web_search` / `web_fetch`。后端路由（Tavily / Brave / SearXNG / 模型原生）在**一处**选择；搜索配置与聊天模型配置独立（协议 §5）。`web_fetch` 只 GET，不接受模型给的 header / cookie / Authorization。
+- [x] 7-15 M4 `web_search` / `web_fetch`。已接入 Tavily、Exa、Serper、SearXNG（自建）与自定义 Base URL/Key；后端路由集中在 `web_search`，搜索配置与聊天模型配置独立。`web_fetch` 只 GET，不接受模型给的 header / cookie / Authorization。OpenAI/Anthropic 原生搜索不纳入当前方案。
 - [ ] 7-16 M5 `run_js`（见 §8）。
 - [ ] 7-17 M6 `save_memory` / `list_memory` / `read_memory`。只有这三个能碰记忆存储，其他工具和 `run_js` 都不能（`../AGENTS.md` §6.3）。
-- [ ] 7-18 M6 `gen_image` / `edit_image`。命名 `images/日期时间-短ID.png`，编辑产出新文件**绝不覆盖原图**（协议 §4）。
+- [x] 7-18 M6 `gen_image` / `edit_image`。已接 OpenAI Image API，命名 `images/日期时间-短ID.png`，编辑产出新文件**绝不覆盖原图**（协议 §4）。
 
 ## 8. `runtime/`：`run_js`
 
@@ -309,7 +309,7 @@ abstract class WepTool {
 - [x] 10-4 设置页接真实配置：provider / key / 模型目录 / 兼容标记 / 搜索后端 / 权限三态 / 记忆开关。key 存 `settings.json`（§13.4 已定），界面只显示 `maskedKey`，永不显示明文。provider 增删改 + `/models` 拉取勾选 + 手动添加 + 逐个「发一句 hi」探活 + 逐模型兼容标记编辑都已可用。
 - [ ] 10-5 用量与费用显示（含 `cacheRead` / `cacheWrite`，§6-12）。**没做**：用量已随助手条目落库（`entries.usage_*`），但界面上还没有任何显示位。
 - [ ] 10-6 中断按钮接 `CancellationToken`；"上次被中断，可重试"提示接 §9-7。中断按钮已接（`SessionStore.stopGenerating`，部分文本以 `aborted` 落库）；**"上次被中断"提示没做**——`AppBootstrap.interruptedSessionIds` 取到了但没人读。
-- [ ] 10-7 现有的 HTML 预览 / 图片查看 / 文件查看页面接真实工作区文件。
+- [ ] 10-7 现有的 HTML 预览 / 图片查看 / 文件查看页面接真实工作区文件。下一阶段扩展：更多文件类型、上传/导出、HTML 预览与工作区增删查改。
 
 ## 11. 里程碑
 
@@ -319,9 +319,9 @@ abstract class WepTool {
 | **M1** | 三个适配器（completions / responses / messages）+ 设置页配 provider 与 key + loop 接线（空工具表） | 无工具的纯聊天流式跑通，可中断，用量能看到 | 完成（用量显示欠着，见 10-5） |
 | **M2** | 工具注册 + 权限门 + 工作区文件工具 | 能让模型读写工作区文件，权限三态生效，写操作串行 | 下一个 |
 | **M3** | 缓存策略 + 压缩 | 界面能看到 cacheRead > 0；长会话自动压缩不报错 | — |
-| **M4** | `web_search` / `web_fetch` + 搜索后端 | 至少一个后端能用 | — |
+| **M4** | `web_search` / `web_fetch` + 搜索后端 | 至少一个后端能用 | 完成（Tavily / Exa / Serper / SearXNG / 自定义） |
 | **M5** | QuickJS + `run_js` | 死循环脚本能被真中断（不是超时放手） | — |
-| **M6** | 记忆 + `gen_image` / `edit_image` | 记忆三态开关生效；图片不覆盖 | — |
+| **M6** | 记忆 + `gen_image` / `edit_image` | 记忆三态开关生效；图片不覆盖 | 图片工具完成；记忆待后续 |
 | **P1** | 协议 §11 的 P1 项 | — | — |
 
 顺序理由：存储在最前面，因为它是唯一"错了要迁移数据"的部分——晚改代价最大。
@@ -358,4 +358,3 @@ abstract class WepTool {
 6. **编辑重发用 truncate 标记**而非分支树（存储文档 §8）。
 7. **搜索后端第一版只做一个**（原计划两个）：Tavily。一个能用胜过两个都半成品，第二个等有人真的要换的时候再加。
 8. **压缩自动触发**，触发时在界面上说明"上下文已压缩"。询问会打断聊天节奏。
-

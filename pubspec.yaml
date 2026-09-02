@@ -33,6 +33,8 @@ dependencies:
   url_launcher: ^6.3.2
   file_selector: ^1.1.0
   flutter_math_fork: ^0.7.4
+  desktop_drop: ^0.8.4
+  super_clipboard: ^0.9.1
 
 dev_dependencies:
   flutter_test:

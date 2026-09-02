@@ -7,6 +7,7 @@ import '../ai/provider_api.dart';
 import '../ai/stream_event.dart';
 import '../core/cancellation_token.dart';
 import '../platform/workspace_guard.dart';
+import '../state/app_settings.dart';
 import '../tools/tool.dart';
 import '../tools/tool_registry.dart';
 import 'agent_event.dart';
@@ -17,6 +18,7 @@ class AgentConfig {
     required this.model,
     required this.sessionId,
     required this.workspace,
+    this.settings,
     this.systemPrompt,
     this.maxIterations = 20,
     this.maxOutputTokens,
@@ -29,6 +31,7 @@ class AgentConfig {
 
   /// 这个会话工作区的路径守卫，直接进 [ToolContext]。
   final WorkspaceGuard workspace;
+  final AppSettings? settings;
 
   final String? systemPrompt;
 
@@ -164,6 +167,7 @@ class AgentLoop {
             sessionId: _config.sessionId,
             workspace: _config.workspace,
             token: token,
+            settings: _config.settings,
           ),
         );
 

@@ -12,6 +12,9 @@ import 'workspace/list_files_tool.dart';
 import 'workspace/read_file_tool.dart';
 import 'workspace/search_files_tool.dart';
 import 'workspace/write_file_tool.dart';
+import 'web/web_fetch_tool.dart';
+import 'web/web_search_tool.dart';
+import 'image/image_tools.dart';
 
 /// M2 的工作区文件工具全集（§7-14）。
 const List<Tool> kWorkspaceTools = <Tool>[
@@ -21,6 +24,20 @@ const List<Tool> kWorkspaceTools = <Tool>[
   ReadFileTool(),
   SearchFilesTool(),
   WriteFileTool(),
+];
+
+/// 默认启用的网络与图片工具。搜索后端和图片模型由 AppSettings 提供，
+/// 工具本身不把 Key 或 provider 状态复制进注册表。
+const List<Tool> kNetworkAndImageTools = <Tool>[
+  WebFetchTool(),
+  WebSearchTool(),
+  GenImageTool(),
+  EditImageTool(),
+];
+
+const List<Tool> kDefaultTools = <Tool>[
+  ...kWorkspaceTools,
+  ...kNetworkAndImageTools,
 ];
 
 /// 工具的查找与声明排序。

@@ -178,6 +178,14 @@ const List<ModelSpec> kSeedModels = <ModelSpec>[
     maxOutputTokens: 32768,
     compat: ModelCompat(supportsPromptCacheKey: true, visionInput: true),
   ),
+  ModelSpec(
+    id: 'gpt-image-1',
+    displayName: 'GPT Image 1',
+    providerId: 'openai',
+    contextWindow: 32768,
+    maxOutputTokens: 4096,
+    compat: ModelCompat(visionInput: true),
+  ),
 
   // ---- DeepSeek ----
   // 思考内容在 reasoning_content 字段里，服务端自动缓存不需要参数

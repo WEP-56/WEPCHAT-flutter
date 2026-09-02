@@ -139,7 +139,8 @@ class _ChatViewState extends State<ChatView> {
                 ),
               Composer(
                 isGenerating: store.isGenerating,
-                onSend: store.sendMessage,
+                onSend: (String text, List<PendingAttachment> attachments) =>
+                    store.sendMessage(text, attachments: attachments),
                 onStop: store.stopGenerating,
               ),
             ],

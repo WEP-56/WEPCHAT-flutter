@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
@@ -231,15 +232,19 @@ class SessionStore extends ChangeNotifier {
   }
 
   /// 发一条新消息：落库 + 请模型回复。
-  Future<void> sendMessage(String text) async {
+  Future<void> sendMessage(
+    String text, {
+    List<PendingAttachment> attachments = const <PendingAttachment>[],
+  }) async {
     final String trimmed = text.trim();
-    if (trimmed.isEmpty) return;
+    if (trimmed.isEmpty && attachments.isEmpty) return;
     if (_run != null) return; // 同时只跑一个。
 
     final ChatSession session = active;
     await _askWithUserMessage(
       session,
       trimmed,
+      attachments: attachments,
       isFirst: session.messages.isEmpty,
     );
   }
@@ -298,6 +303,7 @@ class SessionStore extends ChangeNotifier {
     ChatSession session,
     String text, {
     required bool isFirst,
+    List<PendingAttachment> attachments = const <PendingAttachment>[],
   }) async {
     // 用户又发话了，"上次被中断"这条提示就过期了。
     clearInterrupted(session.id);
@@ -308,7 +314,18 @@ class SessionStore extends ChangeNotifier {
         id: Ulid.generate(),
         type: EntryType.message,
         role: EntryRole.user,
-        payload: <String, Object?>{'text': text},
+        payload: <String, Object?>{
+          'text': text,
+          if (attachments.isNotEmpty)
+            'attachments': <Map<String, Object?>>[
+              for (final PendingAttachment a in attachments)
+                <String, Object?>{
+                  'name': a.name,
+                  'mimeType': a.mimeType,
+                  'base64': base64Encode(a.bytes),
+                },
+            ],
+        },
       ),
       preview: text,
     );
@@ -397,12 +414,13 @@ class SessionStore extends ChangeNotifier {
   }) async {
     final AgentLoop loop = AgentLoop(
       api: api,
-      tools: ToolRegistry(kWorkspaceTools, gate: _gate),
+      tools: ToolRegistry(kDefaultTools, gate: _gate),
       config: AgentConfig(
         model: model,
         sessionId: sessionId,
         workspace: WorkspaceGuard(_workspaces.ensureSession(sessionId)),
         systemPrompt: _systemPrompt(sessionId),
+        settings: _settings,
         maxOutputTokens: model.maxOutputTokens,
         // o 系列拒收 temperature，靠模型的兼容开关决定发不发（§4.2）。
         temperature: model.compat.supportsTemperature
@@ -468,9 +486,24 @@ class SessionStore extends ChangeNotifier {
       if (!entry.isUsableInContext) continue;
 
       final String text = entry.payload['text'] as String? ?? '';
+      final List<ai.ContentPart> parts = <ai.ContentPart>[ai.TextPart(text)];
+      final Object? rawAttachments = entry.payload['attachments'];
+      if (rawAttachments is List) {
+        for (final Object? raw in rawAttachments) {
+          if (raw is! Map<String, Object?>) continue;
+          final String? b64 = raw['base64'] as String?;
+          final String? mime = raw['mimeType'] as String?;
+          if (b64 == null || mime == null) continue;
+          parts.add(ai.ImagePart(base64Data: b64, mimeType: mime));
+        }
+      }
       switch (entry.role) {
         case EntryRole.user:
-          if (text.isNotEmpty) history.add(ai.ChatMessageModel.user(text));
+          if (text.isNotEmpty || parts.length > 1) {
+            history.add(
+              ai.ChatMessageModel(role: ai.MessageRole.user, parts: parts),
+            );
+          }
         case EntryRole.assistant:
           // thinking 不回传：跨模型时别人的思考块会被拒（§6-15），而重放
           // 自己的思考也没有收益。正文为空的轮次直接跳过。
@@ -546,7 +579,9 @@ class SessionStore extends ChangeNotifier {
 
     // 扫描工作区文件并合并到会话里。
     final String workspacePath = _workspaces.pathFor(sessionId);
-    final List<WorkspaceFile> files = await scanWorkspaceDirectory(workspacePath);
+    final List<WorkspaceFile> files = await scanWorkspaceDirectory(
+      workspacePath,
+    );
     final ChatSession withFiles = updated.copyWith(files: files);
 
     final int index = _sessions.indexWhere(
@@ -584,7 +619,9 @@ class SessionStore extends ChangeNotifier {
 
       // 加载工作区文件。
       final String workspacePath = workspaces.pathFor(summary.id);
-      final List<WorkspaceFile> files = await scanWorkspaceDirectory(workspacePath);
+      final List<WorkspaceFile> files = await scanWorkspaceDirectory(
+        workspacePath,
+      );
       result.add(session.copyWith(files: files));
     }
     return result;
@@ -695,12 +732,26 @@ class SessionStore extends ChangeNotifier {
     final bool isUser = entry.role == EntryRole.user;
     final String text = entry.payload['text'] as String? ?? '';
     final int? elapsedMs = entry.payload['elapsedMs'] as int?;
+    final List<Attachment> attachments = <Attachment>[];
+    final Object? rawAttachments = entry.payload['attachments'];
+    if (rawAttachments is List) {
+      for (final Object? raw in rawAttachments) {
+        if (raw is! Map<String, Object?> || raw['name'] is! String) continue;
+        final String name = raw['name'] as String;
+        final String mime = raw['mimeType'] as String? ?? '';
+        final FileKind kind = mime.startsWith('image/')
+            ? FileKind.png
+            : FileKind.txt;
+        attachments.add(Attachment(name: name, size: '附件', kind: kind));
+      }
+    }
 
     return ChatMessage(
       id: entry.id,
       role: isUser ? ChatRole.user : ChatRole.assistant,
       time: _timeLabel(entry.createdAt),
       seq: entry.seq,
+      attachments: attachments,
       // 原始文本原样留一份：复制和编辑要的是 Markdown 源码，从 blocks
       // 反推回去是有损的。
       rawText: text,

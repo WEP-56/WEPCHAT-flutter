@@ -9,6 +9,7 @@ library;
 import '../ai/provider_api.dart';
 import '../core/cancellation_token.dart';
 import '../platform/workspace_guard.dart';
+import '../state/app_settings.dart';
 
 /// 一次工具执行的收场方式（实施 TODO §7-3）。
 ///
@@ -89,6 +90,7 @@ class ToolContext {
     required this.sessionId,
     required this.workspace,
     required this.token,
+    this.settings,
   });
 
   final String sessionId;
@@ -101,6 +103,9 @@ class ToolContext {
 
   /// 用户中断时会被取消。长操作要在关键点检查（§3-1）。
   final CancellationToken token;
+
+  /// 应用级搜索与图片配置，以及默认模型选择。
+  final AppSettings? settings;
 
   String get workspaceRoot => workspace.root;
 }

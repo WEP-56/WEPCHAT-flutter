@@ -1,3 +1,4 @@
+// ignore_for_file: curly_braces_in_flow_control_structures
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -30,6 +31,9 @@ class AppSettings extends ChangeNotifier {
     required MemoryMode memoryMode,
     required double temperature,
     required String searchBackendId,
+    required String searchApiKey,
+    required String searchBaseUrl,
+    required List<SearchProviderConfig> searchProviders,
     required String workspaceRoot,
   }) : _store = store,
        _providers = providers,
@@ -43,6 +47,9 @@ class AppSettings extends ChangeNotifier {
        _memoryMode = memoryMode,
        _temperature = temperature,
        _searchBackendId = searchBackendId,
+       _searchApiKey = searchApiKey,
+       _searchBaseUrl = searchBaseUrl,
+       _searchProviders = searchProviders,
        _workspaceRoot = workspaceRoot;
 
   /// 从磁盘读。文件不存在时用默认值（首次启动）。
@@ -83,6 +90,15 @@ class AppSettings extends ChangeNotifier {
       temperature: (json['temperature'] as num?)?.toDouble().clamp(0, 2) ?? 0.7,
       searchBackendId:
           json['searchBackendId'] as String? ?? kSearchBackends.first.id,
+      searchApiKey: json['searchApiKey'] as String? ?? '',
+      searchBaseUrl:
+          json['searchBaseUrl'] as String? ?? 'https://api.tavily.com',
+      searchProviders: _readSearchProviders(
+        json['searchProviders'],
+        legacyId: json['searchBackendId'] as String?,
+        legacyKey: json['searchApiKey'] as String?,
+        legacyBaseUrl: json['searchBaseUrl'] as String?,
+      ),
       workspaceRoot: json['workspaceRoot'] as String? ?? kDefaultWorkspaceRoot,
     );
   }
@@ -110,6 +126,9 @@ class AppSettings extends ChangeNotifier {
   MemoryMode _memoryMode;
   double _temperature;
   String _searchBackendId;
+  String _searchApiKey;
+  String _searchBaseUrl;
+  List<SearchProviderConfig> _searchProviders;
   String _workspaceRoot;
 
   /// 记忆条目。
@@ -131,6 +150,17 @@ class AppSettings extends ChangeNotifier {
   MemoryMode get memoryMode => _memoryMode;
   double get temperature => _temperature;
   String get searchBackendId => _searchBackendId;
+  List<SearchProviderConfig> get searchProviders =>
+      List<SearchProviderConfig>.unmodifiable(_searchProviders);
+  SearchProviderConfig? get searchProvider {
+    for (final SearchProviderConfig p in _searchProviders) {
+      if (p.id == _searchBackendId) return p;
+    }
+    return _searchProviders.isEmpty ? null : _searchProviders.first;
+  }
+
+  String get searchApiKey => searchProvider?.apiKey ?? _searchApiKey;
+  String get searchBaseUrl => searchProvider?.baseUrl ?? _searchBaseUrl;
   String get workspaceRoot => _workspaceRoot;
   String get defaultModelKey => _defaultModelKey;
   String? get imageGenModelKey => _imageGenModelKey;
@@ -311,6 +341,62 @@ class AppSettings extends ChangeNotifier {
   void setSearchBackend(String id) {
     if (_searchBackendId == id) return;
     _searchBackendId = id;
+    _changed();
+  }
+
+  void addSearchProvider(SearchProviderConfig provider) {
+    if (_searchProviders.any((SearchProviderConfig p) => p.id == provider.id))
+      return;
+    _searchProviders = <SearchProviderConfig>[..._searchProviders, provider];
+    _changed();
+  }
+
+  void updateSearchProvider(SearchProviderConfig provider) {
+    final int index = _searchProviders.indexWhere(
+      (SearchProviderConfig p) => p.id == provider.id,
+    );
+    if (index < 0) return;
+    _searchProviders = <SearchProviderConfig>[..._searchProviders]
+      ..[index] = provider;
+    _changed();
+  }
+
+  void removeSearchProvider(String id) {
+    final SearchProviderConfig? target = searchProviderById(id);
+    if (target == null || target.builtin) return;
+    _searchProviders = _searchProviders
+        .where((SearchProviderConfig p) => p.id != id)
+        .toList();
+    if (_searchBackendId == id)
+      _searchBackendId = _searchProviders.isEmpty
+          ? ''
+          : _searchProviders.first.id;
+    _changed();
+  }
+
+  SearchProviderConfig? searchProviderById(String id) {
+    for (final SearchProviderConfig p in _searchProviders) {
+      if (p.id == id) return p;
+    }
+    return null;
+  }
+
+  void setSearchConfig({String? apiKey, String? baseUrl}) {
+    final String nextKey = apiKey?.trim() ?? _searchApiKey;
+    final String nextBase = baseUrl?.trim() ?? _searchBaseUrl;
+    if (nextKey == _searchApiKey && nextBase == _searchBaseUrl) return;
+    _searchApiKey = nextKey;
+    if (nextBase.isNotEmpty) _searchBaseUrl = nextBase;
+    final SearchProviderConfig? selected = searchProvider;
+    if (selected != null) {
+      updateSearchProvider(
+        selected.copyWith(
+          apiKey: nextKey,
+          baseUrl: nextBase.isEmpty ? selected.baseUrl : nextBase,
+        ),
+      );
+      return;
+    }
     _changed();
   }
 
@@ -532,6 +618,11 @@ class AppSettings extends ChangeNotifier {
     },
     'memoryMode': _memoryMode.name,
     'searchBackendId': _searchBackendId,
+    'searchApiKey': _searchApiKey,
+    'searchBaseUrl': _searchBaseUrl,
+    'searchProviders': <Map<String, Object?>>[
+      for (final SearchProviderConfig p in _searchProviders) p.toJson(),
+    ],
     'workspaceRoot': _workspaceRoot,
     'themeMode': _themeMode.name,
     'accent': _accent.name,
@@ -558,6 +649,36 @@ class AppSettings extends ChangeNotifier {
       out.add(parsed);
     }
     return out;
+  }
+
+  static List<SearchProviderConfig> _readSearchProviders(
+    Object? raw, {
+    String? legacyId,
+    String? legacyKey,
+    String? legacyBaseUrl,
+  }) {
+    if (raw is List) {
+      final List<SearchProviderConfig> out = <SearchProviderConfig>[];
+      for (final Object? item in raw) {
+        final SearchProviderConfig? parsed = SearchProviderConfig.fromJson(
+          item,
+        );
+        if (parsed != null) out.add(parsed);
+      }
+      if (out.isNotEmpty) return out;
+    }
+    final List<SearchProviderConfig> seeded = <SearchProviderConfig>[
+      for (final SearchProviderConfig preset in kSearchProviderPresets)
+        preset.id == (legacyId ?? 'tavily')
+            ? preset.copyWith(
+                apiKey: legacyKey ?? '',
+                baseUrl: (legacyBaseUrl == null || legacyBaseUrl.isEmpty)
+                    ? preset.baseUrl
+                    : legacyBaseUrl,
+              )
+            : preset,
+    ];
+    return seeded;
   }
 
   static List<ModelSpec> _readModels(Object? raw) {

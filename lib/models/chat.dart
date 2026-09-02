@@ -1,4 +1,5 @@
 import 'content.dart';
+import 'dart:typed_data';
 import 'tool_call.dart';
 import 'workspace.dart';
 
@@ -13,6 +14,15 @@ class Attachment {
   final String name;
   final String size;
   final FileKind kind;
+}
+
+/// 尚未落库的用户附件；发送时转成请求层的 ImagePart 或文本内容。
+class PendingAttachment {
+  const PendingAttachment({required this.name, required this.mimeType, required this.bytes});
+  final String name;
+  final String mimeType;
+  final Uint8List bytes;
+  bool get isImage => mimeType.startsWith('image/');
 }
 
 /// `gen_image` / `edit_image` 的产物。

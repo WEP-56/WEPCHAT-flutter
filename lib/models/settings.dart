@@ -1,4 +1,6 @@
+// ignore_for_file: curly_braces_in_flow_control_structures
 import 'package:flutter/material.dart';
+import '../core/ulid.dart';
 
 /// 工作区根目录默认值。真实路径在首次用到时由 `wep_storage` 解析成绝对路径。
 const String kDefaultWorkspaceRoot = r'~/WePChat/workspaces';
@@ -143,6 +145,123 @@ class SearchBackendSpec {
   final String name;
   final String desc;
 }
+
+/// 搜索服务配置。和聊天 Provider 分开：用户可以用任意聊天模型，搜索则走另一把 Key。
+class SearchProviderConfig {
+  const SearchProviderConfig({
+    required this.id,
+    required this.name,
+    required this.kind,
+    required this.baseUrl,
+    this.apiKey = '',
+    this.builtin = false,
+  });
+
+  factory SearchProviderConfig.create({
+    required String name,
+    required String kind,
+    required String baseUrl,
+    String apiKey = '',
+  }) => SearchProviderConfig(
+    id: Ulid.generate(),
+    name: name,
+    kind: kind,
+    baseUrl: baseUrl,
+    apiKey: apiKey,
+  );
+
+  final String id;
+  final String name;
+
+  /// tavily / exa / serper / searxng / custom。
+  final String kind;
+  final String baseUrl;
+  final String apiKey;
+  final bool builtin;
+
+  bool get configured => apiKey.trim().isNotEmpty || kind == 'searxng';
+  String get maskedKey {
+    if (apiKey.isEmpty) return '未配置';
+    if (apiKey.length <= 10) return '••••••••';
+    return '${apiKey.substring(0, 6)}••••${apiKey.substring(apiKey.length - 4)}';
+  }
+
+  SearchProviderConfig copyWith({
+    String? name,
+    String? kind,
+    String? baseUrl,
+    String? apiKey,
+  }) => SearchProviderConfig(
+    id: id,
+    name: name ?? this.name,
+    kind: kind ?? this.kind,
+    baseUrl: baseUrl ?? this.baseUrl,
+    apiKey: apiKey ?? this.apiKey,
+    builtin: builtin,
+  );
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'id': id,
+    'name': name,
+    'kind': kind,
+    'baseUrl': baseUrl,
+    'apiKey': apiKey,
+    'builtin': builtin,
+  };
+
+  static SearchProviderConfig? fromJson(Object? raw) {
+    if (raw is! Map<String, Object?>) return null;
+    final String? id = raw['id'] as String?;
+    final String? kind = raw['kind'] as String?;
+    final String? base = raw['baseUrl'] as String?;
+    if (id == null ||
+        id.isEmpty ||
+        kind == null ||
+        base == null ||
+        base.isEmpty)
+      return null;
+    return SearchProviderConfig(
+      id: id,
+      name: raw['name'] as String? ?? kind,
+      kind: kind,
+      baseUrl: base,
+      apiKey: raw['apiKey'] as String? ?? '',
+      builtin: raw['builtin'] as bool? ?? false,
+    );
+  }
+}
+
+const List<SearchProviderConfig> kSearchProviderPresets =
+    <SearchProviderConfig>[
+      SearchProviderConfig(
+        id: 'tavily',
+        name: 'Tavily',
+        kind: 'tavily',
+        baseUrl: 'https://api.tavily.com',
+        builtin: true,
+      ),
+      SearchProviderConfig(
+        id: 'exa',
+        name: 'Exa',
+        kind: 'exa',
+        baseUrl: 'https://api.exa.ai',
+        builtin: true,
+      ),
+      SearchProviderConfig(
+        id: 'serper',
+        name: 'Serper',
+        kind: 'serper',
+        baseUrl: 'https://google.serper.dev',
+        builtin: true,
+      ),
+      SearchProviderConfig(
+        id: 'searxng',
+        name: 'SearXNG（自建）',
+        kind: 'searxng',
+        baseUrl: '',
+        builtin: true,
+      ),
+    ];
 
 /// memory.json 中的一条全局记忆。
 class MemoryEntry {

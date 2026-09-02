@@ -175,7 +175,7 @@ web_search → 选中一个结果 → web_fetch
 
 ### 4.3 搜索后端统一路由
 
-模型只看到 `web_search` 和 `web_fetch`，不直接看到供应商原生工具名。
+模型只看到 `web_search` 和 `web_fetch`，不直接看到供应商原生工具名。当前实现支持 Tavily、Exa、Serper、SearXNG（自建）以及自定义搜索服务；OpenAI/Anthropic 原生搜索不作为当前后端。
 
 ```text
 web_search
@@ -516,6 +516,16 @@ agent_end
 - OpenAI/Anthropic 原生搜索后端
 - Android 文件导入和 Windows 文件夹设置
 - 工作区文件导出
+
+下一阶段工作区增强：
+
+- 更多文件类型的识别、查看与编辑
+- 附件上传与工作区文件导出
+- HTML/CSS/JavaScript 真实预览
+- 工作区文件的增删查改能力完善
+- 内置真实浏览器，HTML 预览基于浏览器内核实现
+
+内置浏览器参考实现：`example/fluxdo`。
 
 ### P2
 
