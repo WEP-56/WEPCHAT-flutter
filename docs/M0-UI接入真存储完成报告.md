@@ -4,6 +4,24 @@
 **里程碑**: M0 — UI 接入真存储  
 **状态**: ✅ 完成
 
+> **这是历史存档，不是现状。** 写于 M0 收尾时，M1 之后有几处已经不成立，
+> 照着改代码会踩空：
+>
+> - **`SessionStore.load` 的签名变了**：现在是
+>   `load({storage, workspaces, settings})`，不再有 `defaultModel` 参数。
+> - **模型字符串映射那一节（§2、§关键设计 2）整节作废**：`kAvailableModels`
+>   已删除，会话存的是 `ModelSpec.key`（`providerId/modelId`），
+>   `_providerFor()` 按**第一个**斜杠切，不再从展示名猜 provider。
+> - **占位会话「加载中...」不存在**：`active` 直接 `firstWhere`，`load()`
+>   保证列表非空。
+> - **文末「M1 核心任务」已全部完成**，且实现方式与那里的设想不同：
+>   纯聊天路径**不走 `AgentExecutor`/loop**，`SessionStore` 直接消费适配器的
+>   事件流；接工具时才换成 loop。
+> - `isGenerating` 不再写死 `false`，看的是当前会话有没有在跑。
+>
+> 现状看 `HANDOFF-M2.md`。这份留着是为了记录 M0 接线时的初始化顺序与
+> fake-async 踩坑经过，那部分依然有效。
+
 ---
 
 ## 目标达成
@@ -372,41 +390,24 @@ ChatSession get active {
 
 ---
 
-## 接下来：M1 准备
+## 接下来：M1（**已完成**）
 
 M0 目标达成：**现有界面跑在真存储上，会话在重启后持久化，UI 代码零改动**。
 
-下一步进入 M1：agent 集成。
+M1 也已完成并由用户实测通过（三种协议的纯聊天 + 中断）。下面这份任务清单是
+M0 收尾时的设想，**实际实现与它有出入**，保留仅供对照：
 
-### M1 核心任务
+1. ~~**Provider 层**：抽象 `LlmProvider` 接口 + `AnthropicProvider` + 注册表~~
+   → 实际做成 `ProviderApi` 抽象 + 三个适配器 + `createProviderApi` 工厂，
+   provider 配置是用户数据（`settings.json`），不是代码里的注册表。
+2. ~~**Agent 框架**：`AgentExecutor` 驱动请求循环~~
+   → `AgentLoop` 写好了但**纯聊天路径没走它**：`SessionStore` 直接消费
+   `api.stream(...)`。接工具（M2）时才换过去。
+3. ~~**UI 事件驱动**~~ → 已做，但事件来自适配器的 `StreamEvent` 而非 `AgentEvent`。
+4. ~~**run 状态管理**~~ → `startRun` / `finishRun` / `CancellationTokenSource`
+   已接。**「上次被中断，可重试」提示仍然欠着**（§10-6）。
 
-1. **Provider 层**（实施 TODO §M1-1）
-   - 抽象 `LlmProvider` 接口
-   - 实现 `AnthropicProvider`（调 Messages API）
-   - 注册表：`provider_id` → `Provider` 实例
-
-2. **Agent 框架**（实施 TODO §M1-2）
-   - `AgentExecutor`：驱动请求循环
-   - 工具注册表：`tool_name` → 实际实现
-   - 流式输出：SSE 或回调方式通知 UI
-
-3. **UI 事件驱动**（实施 TODO §M1-3）
-   - `SessionStore.sendMessage()` 后启动 agent
-   - 监听事件流：`message_start` / `content_block_delta` / `message_end`
-   - 增量更新 UI，落盘到 `entries` 表
-
-4. **run 状态管理**（实施 TODO §M1-4）
-   - `startRun()` / `finishRun()` 包住请求循环
-   - 取消时调 `CancellationToken.cancel()`
-   - 中断恢复：重启后显示"上次回复被中断，可重试"
-
-### 依赖已就绪
-
-- ✅ 存储层完整，表结构支持 agent 需要的所有字段
-- ✅ `CancellationToken` 实现，agent 循环可中断
-- ✅ `run` 表与中断标记机制
-- ✅ 错误体系与日志脱敏
-- ✅ UI 层的 `isGenerating` 钩子（M0 写死返回 `false`，M1 改成读 run 状态）
+下一步是 M2（工具注册 + 权限门 + 文件工具），见 `HANDOFF-M2.md`。
 
 ---
 

@@ -3,7 +3,7 @@
 
 适用平台：Android、Windows
 
-关联文档：`WePChat-Flutter-功能与工具协议.md` §2.1 §2.2、`AGENTS.md` §1.3 §5.3 §6.1 §7 §8
+关联文档：`WePChat-Flutter-功能与工具协议.md` §2.1 §2.2、`../AGENTS.md` §1.3 §5.3 §6.1 §7 §8
 
 这份文档只负责一件事：**会话数据本身怎么存**。上下文如何拼接、如何命中缓存写在实施 TODO 里，但两者有一条硬接缝——存储必须是追加式且历史不可变，否则 prompt cache 的前缀匹配永远失效。见 §7。
 
@@ -30,7 +30,7 @@
 约束：
 
 - 断电或进程被杀不能损坏历史。
-- Android 上 IO 慢且不能阻塞 UI isolate（`AGENTS.md` §5.3）。
+- Android 上 IO 慢且不能阻塞 UI isolate（`../AGENTS.md` §5.3）。
 - 删除会话要能连带清理引用的二进制。
 
 ## 2. 为什么不用 JSON
@@ -72,7 +72,7 @@ sqlite3: ^2.x              # Dart FFI 绑定
 sqlite3_flutter_libs: ^0.5.x  # 打包 Android .so 与 Windows sqlite3.dll
 ```
 
-**不引入 drift。** 理由：我们的查询总量在十几条以内，手写 SQL 更可控；drift 的生成类型会渗透到领域层，违反 `AGENTS.md` §8。代价是迁移和 isolate 封装要自己写，见 §9 §10，量不大。
+**不引入 drift。** 理由：我们的查询总量在十几条以内，手写 SQL 更可控；drift 的生成类型会渗透到领域层，违反 `../AGENTS.md` §8。代价是迁移和 isolate 封装要自己写，见 §9 §10，量不大。
 
 压缩用 `dart:io` 自带的 `GZipCodec`，不引入压缩依赖。
 
@@ -244,13 +244,13 @@ ORDER BY seq;
 
 ### 7.3 派生状态靠回放，不靠就地修改
 
-当前模型、思考档位、启用的工具集由 `model_change` / `thinking_change` / `tools_change` 条目回放得到。`sessions` 表上的同名列只是展示用缓存；两者不一致时**以回放为准**，并把这种不一致当作 bug 报错，不静默采用缓存值（`AGENTS.md` §1.3）。
+当前模型、思考档位、启用的工具集由 `model_change` / `thinking_change` / `tools_change` 条目回放得到。`sessions` 表上的同名列只是展示用缓存；两者不一致时**以回放为准**，并把这种不一致当作 bug 报错，不静默采用缓存值（`../AGENTS.md` §1.3）。
 
 ## 8. 编辑重发
 
 聊天客户端要能"改掉上一句重发"。在追加式模型里不做成树，而是追加一条 `type='truncate'` 条目，payload 记录被截断的起点 `seq`。组装上下文时先收集全部 truncate 标记，跳过被覆盖的区间。
 
-好处是仍然只追加，历史完整可见，实现量很小。代价是不支持多分支并行对话——功能协议里没有这个需求，需要时再迁移成 `parent_seq` 树，届时是一次加列迁移。现在不预留列（`AGENTS.md` §3）。
+好处是仍然只追加，历史完整可见，实现量很小。代价是不支持多分支并行对话——功能协议里没有这个需求，需要时再迁移成 `parent_seq` 树，届时是一次加列迁移。现在不预留列（`../AGENTS.md` §3）。
 
 ## 9. 迁移
 
@@ -261,7 +261,7 @@ ORDER BY seq;
 
 ## 10. 并发与 isolate
 
-- 一个长驻 DB isolate 持有**唯一写连接**，所有读写经 `SendPort` 串行。这同时满足 `AGENTS.md` §5.3（不在 UI isolate 做阻塞 IO）与 §6.2（同一工作区的写必须串行）在存储层的对应要求。
+- 一个长驻 DB isolate 持有**唯一写连接**，所有读写经 `SendPort` 串行。这同时满足 `../AGENTS.md` §5.3（不在 UI isolate 做阻塞 IO）与 §6.2（同一工作区的写必须串行）在存储层的对应要求。
 - WAL 允许再开只读连接做并发读，但第一版不做——先用单连接把正确性做对，性能不足再加。
 - `sqlite3_flutter_libs` 在 isolate 中加载 native 库的行为需要实机验证，尤其 Android 各 ABI。
 
@@ -298,7 +298,7 @@ CREATE TABLE memories (
 
 好处：`UNIQUE(category, key)` 由数据库保证协议 §7.2 的更新语义，不用在代码里手写查重；`list_memory` 只取摘要不必读全文；不必再写一套 JSON 文件的原子写入与损坏恢复。
 
-访问边界不变：只有 `save_memory` / `list_memory` / `read_memory` 能碰这张表，普通文件工具和 `run_js` 都碰不到（`AGENTS.md` §6.3）。因为 `run_js` 根本不接触真实路径，它连库文件在哪都不知道——这一点上表比文件更安全。
+访问边界不变：只有 `save_memory` / `list_memory` / `read_memory` 能碰这张表，普通文件工具和 `run_js` 都碰不到（`../AGENTS.md` §6.3）。因为 `run_js` 根本不接触真实路径，它连库文件在哪都不知道——这一点上表比文件更安全。
 
 **这是对功能协议 §2.2 的偏离，需要确认后才改协议文档。**
 

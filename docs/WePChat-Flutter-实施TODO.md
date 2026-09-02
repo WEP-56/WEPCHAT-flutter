@@ -1,8 +1,10 @@
 # WePChat 实施 TODO
 
-状态：开工计划，逐项勾选
+状态：M0 完成、M1 完成（无工具纯聊天三协议已由用户实测通过，含中断），M2 待开工
 
-依据：`WePChat-Flutter-功能与工具协议.md`（功能边界，下称"协议"）、`AGENTS.md`（工程约束）、`WePChat-Flutter-会话存储设计.md`（存储，下称"存储文档"）、`example/pi`（实现思路参考，**不复用代码**）
+依据：`WePChat-Flutter-功能与工具协议.md`（功能边界，下称"协议"）、`../AGENTS.md`（工程约束）、`WePChat-Flutter-会话存储设计.md`（存储，下称"存储文档"）、`../example/pi`（实现思路参考，**不复用代码**）
+
+> §0 写于开工前，描述的是**那时**的代码状态（55 个文件、零依赖、`session_store` 操作内存列表）。现在这些都已经不成立，保留是为了记住当初的判断依据，不要拿它当现状读。
 
 ## 0. 阅读结论
 
@@ -16,7 +18,7 @@
 
 ### 0.2 pi 的可用程度
 
-`example/pi` 是清洗后的代码，缺东西。已确认：
+`../example/pi` 是清洗后的代码，缺东西。已确认：
 
 - `packages/agent/src/harness/agent-harness.ts`（508 行）几乎全是 `HarnessNotImplemented` 桩，只有 getter/setter 是实的。**它的接口形状可参考，它的行为不可参考。**
 - `packages/agent/src/harness/tools/index.ts` 只导出 bash/edit/read/write 四个工具，没有 web/memory/image 工具。
@@ -24,7 +26,7 @@
 
 真正完整、值得细读的是：`agent.ts`（有状态包装 + 事件归约）、`harness/tools/edit.ts`（工具形状）、`harness/messages.ts`（自定义角色投影）、`harness/compaction/compaction.ts`（压缩算法）、`harness/session/types.ts`（条目模型）、`harness/session/jsonl/storage.ts`（物理格式，我们不采用）。
 
-**规则：`example/pi` 里的缺失一律视为"代码被删了"，不得当成设计决策。** 需要确认原始行为时查 https://github.com/earendil-works/pi 。
+**规则：`../example/pi` 里的缺失一律视为"代码被删了"，不得当成设计决策。** 需要确认原始行为时查 https://github.com/earendil-works/pi 。
 
 ### 0.3 与协议的三处偏离（需用户确认）
 
@@ -52,16 +54,16 @@ lib/
 ├── theme/ ui/ app/  现有界面                                  依赖：state, models
 ```
 
-硬规则（`AGENTS.md` §1.2 §7）：
+硬规则（`../AGENTS.md` §1.2 §7）：
 
 - [ ] 1-1 `ai/`、`agent/`、`storage/`、`core/` 内**不出现** `import 'package:flutter/...'`。
 - [ ] 1-2 箭头只朝下，不出现反向 import；`ui/` 不直接 import `ai/`。
 - [ ] 1-3 `Platform.isAndroid` / `isWindows` 只允许出现在 `platform/`。
-- [ ] 1-4 单文件 ≤ 800 行，目标 300–600（`AGENTS.md` §2.1）。适配器按 API 分文件，工具一个一文件。
+- [ ] 1-4 单文件 ≤ 800 行，目标 300–600（`../AGENTS.md` §2.1）。适配器按 API 分文件，工具一个一文件。
 
 ## 2. 依赖新增计划
 
-`pubspec.yaml` 现在是空的，每一项都要按 `AGENTS.md` §8 交代 Android ABI / Windows 打包 / 体积 / 许可 / 维护状态。
+`pubspec.yaml` 现在是空的，每一项都要按 `../AGENTS.md` §8 交代 Android ABI / Windows 打包 / 体积 / 许可 / 维护状态。
 
 | 里程碑 | 包 | 用途 | 需要验证 |
 |---|---|---|---|
@@ -86,8 +88,8 @@ Dart 没有 `AbortSignal`，`Future` 也不可取消。协议 §5.3 要求"所�
 
 - [ ] 3-1 `CancellationToken`：`isCancelled`、`throwIfCancelled()`、`onCancel(cb)`、`Future<void> get whenCancelled`。可从父 token 派生（一轮回复取消 ⇒ 其中所有工具取消）。约 60 行。
 - [ ] 3-2 每个可能阻塞的调用都接受 `CancellationToken`：HTTP（`http.Client.close()` 中断流）、文件读写（分块读，块间检查）、QuickJS（`JS_SetInterruptHandler`，见 §8）、DB（长事务前检查）。
-- [ ] 3-3 错误体系：`WepError` 基类 + `NetworkError` / `ApiError(status, providerMessage)` / `AuthError` / `ToolError` / `PermissionDeniedError` / `CancelledError` / `StorageError` / `ValidationError`。禁止裸 `Exception('...')`（`AGENTS.md` §1.3）。
-- [ ] 3-4 **日志脱敏是一个函数，不是各处自觉**：`redact(String)` 去掉 `sk-*`、`Authorization` 头、绝对路径的用户名段。所有 log 出口只走这一个函数（`AGENTS.md` §1.2 §2.4）。
+- [ ] 3-3 错误体系：`WepError` 基类 + `NetworkError` / `ApiError(status, providerMessage)` / `AuthError` / `ToolError` / `PermissionDeniedError` / `CancelledError` / `StorageError` / `ValidationError`。禁止裸 `Exception('...')`（`../AGENTS.md` §1.3）。
+- [ ] 3-4 **日志脱敏是一个函数，不是各处自觉**：`redact(String)` 去掉 `sk-*`、`Authorization` 头、绝对路径的用户名段。所有 log 出口只走这一个函数（`../AGENTS.md` §1.2 §2.4）。
 - [ ] 3-5 ULID 生成（时间前缀 + 随机），会话 id / 条目 id / 工具调用 id 共用。不引入包，约 40 行。
 - [ ] 3-6 `Result<T>` 还是抛异常？定：**领域可预期失败用返回值**（工具结果的四态、权限拒绝），**编程错误和不可恢复失败抛异常**。不做全局 Result 化，避免每层都在解包。
 
@@ -97,10 +99,10 @@ Dart 没有 `AbortSignal`，`Future` 也不可取消。协议 §5.3 要求"所�
 
 ### 4.1 统一契约
 
-- [ ] 4-1 `abstract class ProviderApi`：`Stream<StreamEvent> stream(Request req, CancellationToken t)` + `Future<AssistantMessage> streamSimple(...)`（无工具的一次性调用，给标题生成和压缩摘要用）。
-- [ ] 4-2 **`stream` 永不抛异常、永不 `addError`**。失败编码进最终事件：`done` 携带一条 `stopReason: error|aborted` + `errorMessage` 的 `AssistantMessage`。这条是 pi 的核心契约，抄。理由：上层 loop 只处理一种失败路径，不必同时接 try/catch 和事件。
-- [ ] 4-3 事件序列固定：`start` → `textDelta` / `thinkingDelta` / `toolCallDelta`（任意交错）→ `done`。每个事件都带**当前完整的 partial `AssistantMessage`**，界面可以直接整条重绘，不用自己拼增量。
-- [ ] 4-4 一个共享 SSE 解析器（`ai/sse.dart`），三个适配器都用它。绝不写三份行拆分逻辑（`AGENTS.md` §1.2）。注意：`data: [DONE]`、多行 `data:`、注释行 `:`、`event:` 字段、UTF-8 多字节被切在块边界。
+- [x] 4-1 `abstract class ProviderApi`：`Stream<StreamEvent> stream(Request req, CancellationToken t)` + `Future<AssistantMessage> streamSimple(...)`（无工具的一次性调用，给标题生成和压缩摘要用）。
+- [x] 4-2 **`stream` 永不抛异常、永不 `addError`**。失败编码进最终事件：`done` 携带一条 `stopReason: error|aborted` + `errorMessage` 的 `AssistantMessage`。这条是 pi 的核心契约，抄。理由：上层 loop 只处理一种失败路径，不必同时接 try/catch 和事件。
+- [x] 4-3 事件序列固定：`start` → `textDelta` / `thinkingDelta` / `toolCallDelta`（任意交错）→ `done`。每个事件都带**当前完整的 partial `AssistantMessage`**，界面可以直接整条重绘，不用自己拼增量。
+- [x] 4-4 一个共享 SSE 解析器（`ai/sse.dart`），三个适配器都用它。绝不写三份行拆分逻辑（`../AGENTS.md` §1.2）。注意：`data: [DONE]`、多行 `data:`、注释行 `:`、`event:` 字段、UTF-8 多字节被切在块边界。
 
 ### 4.2 兼容标记（只列第一版真正需要的）
 
@@ -121,16 +123,16 @@ class ModelCompat {
 }
 ```
 
-- [ ] 4-5 标记存在模型目录里，不硬编码在适配器里。用户添加自定义模型时能在设置里选这些开关（协议 §8 要求可自定义 provider）。
-- [ ] 4-6 新增一个标记必须同时说明"哪个真实模型需要它"。不为假想的模型加标记（`AGENTS.md` §3）。
+- [x] 4-5 标记存在模型目录里，不硬编码在适配器里。用户添加自定义模型时能在设置里选这些开关（协议 §8 要求可自定义 provider）。设置页的「模型参数」弹窗（`ui/settings/model_meta_dialog.dart`）逐项可改，高级项默认折叠。
+- [ ] 4-6 新增一个标记必须同时说明"哪个真实模型需要它"。不为假想的模型加标记（`../AGENTS.md` §3）。
 
 ### 4.3 三个适配器各自的坑
 
-- [ ] 4-7 **openai-completions**：`tool_calls` 的 `index` 字段是拼接依据，`id` 只在第一个 delta 出现；`arguments` 是字符串增量，全部收完才是合法 JSON（中途 parse 一定失败，不要试）；`finish_reason: "length"` 必须映射成 `stopReason: length`（见 §5.3）；思考内容有三种放法（`reasoning_content` / `reasoning` / `<think>` 标签），按标记选。
-- [ ] 4-8 **openai-responses**：事件是带 `type` 的具名 JSON（`response.output_text.delta`、`response.function_call_arguments.delta`…），不是 completions 的 choices/delta 结构，解析路径完全独立；工具结果作为 `function_call_output` 项回传；`store: false` 必须显式设，否则请求被留在服务端。
-- [ ] 4-9 **anthropic-messages**：`content_block_start/delta/stop` 三段式；`thinking` 块带 `signature`，回传时**必须原样带回**，改一个字节就报错；`input_json_delta` 同样是字符串增量；`tool_result` 是 user 消息里的 block 而不是独立角色；顶层 `system` 是独立字段不是消息。
-- [ ] 4-10 重试：只对 429 / 5xx / 连接失败重试，指数退避 + 尊重 `Retry-After`。**首字节到达后不再重试**——已经吐出的文本无法回收，重试会产生重复内容。这条要写进代码注释。
-- [ ] 4-11 请求日志只记 method / host / path / status / 耗时。**不记 header、不记 body、不记 key**（`AGENTS.md` §2.4）。
+- [x] 4-7 **openai-completions**：`tool_calls` 的 `index` 字段是拼接依据，`id` 只在第一个 delta 出现；`arguments` 是字符串增量，全部收完才是合法 JSON（中途 parse 一定失败，不要试）；`finish_reason: "length"` 必须映射成 `stopReason: length`（见 §5.3）；思考内容有三种放法（`reasoning_content` / `reasoning` / `<think>` 标签），按标记选。
+- [x] 4-8 **openai-responses**：事件是带 `type` 的具名 JSON（`response.output_text.delta`、`response.function_call_arguments.delta`…），不是 completions 的 choices/delta 结构，解析路径完全独立；工具结果作为 `function_call_output` 项回传；`store: false` 必须显式设，否则请求被留在服务端。
+- [x] 4-9 **anthropic-messages**：`content_block_start/delta/stop` 三段式；`thinking` 块带 `signature`，回传时**必须原样带回**，改一个字节就报错；`input_json_delta` 同样是字符串增量；`tool_result` 是 user 消息里的 block 而不是独立角色；顶层 `system` 是独立字段不是消息。
+- [x] 4-10 重试：只对 429 / 5xx / 连接失败重试，指数退避 + 尊重 `Retry-After`。**首字节到达后不再重试**——已经吐出的文本无法回收，重试会产生重复内容。这条要写进代码注释。
+- [x] 4-11 请求日志只记 method / host / path / status / 耗时。**不记 header、不记 body、不记 key**（`../AGENTS.md` §2.4）。
 
 ## 5. `agent/`：loop 与事件
 
@@ -158,13 +160,13 @@ agent_end
 协议列了 `agent_start` / `turn_start` / `message_update` / `tool_execution_start` / `tool_execution_update` / `tool_execution_end` / `turn_end` / `agent_end`。界面需要区分"新气泡出现"和"气泡内容变了"，所以：
 
 - [x] 5-5 把 `message_update` 拆成 `message_start` / `message_update` / `message_end`。这是偏离 B，代码已按此实现（`lib/agent/agent_event.dart`）。
-- [ ] 5-6 界面的会话内容来自 `SessionStore`（它自己是落库方，内存状态与库一致）；agent 事件只驱动"生成中"的那条消息。原文写的"事件流是界面唯一输入"在这里做不到也不必做——历史消息是重启后从库里读的，不可能来自事件流。
+- [x] 5-6 界面的会话内容来自 `SessionStore`（它自己是落库方，内存状态与库一致）；agent 事件只驱动"生成中"的那条消息。原文写的"事件流是界面唯一输入"在这里做不到也不必做——历史消息是重启后从库里读的，不可能来自事件流。
 - [ ] 5-7 ~~纯函数式归约器 + `SessionRuntimeState`~~ **不做**。`SessionStore` 已经是 `ChangeNotifier`，再加一层归约器等于同一份状态存两处。事件在 `SessionStore` 里直接 switch 处理，那个 switch 本身就是归约。
 - [x] 5-8 单一订阅者（`SessionStore`），不做多订阅者分发。异常不吞：`AgentLoop.run` 不抛，失败编码进 `AgentDone`。
 
 ### 5.3 内层循环的几条硬规则（都来自 pi，都有明确理由）
 
-- [ ] 5-9 `stopReason == "length"` 时**整批工具调用全部不执行**，本轮以错误结束。因为最后一个 tool call 的 arguments 被截断了，JSON 不完整，猜参数等于乱执行。
+- [x] 5-9 `stopReason == "length"` 时**整批工具调用全部不执行**，本轮以错误结束。因为最后一个 tool call 的 arguments 被截断了，JSON 不完整，猜参数等于乱执行。（`agent_loop.dart`；纯聊天路径不经 loop，无工具可拦。）
 - [x] 5-10 **全部串行执行**（`AgentLoop` 现在就是顺序 await）。协议 §6.2 只要求写操作串行，但全串行同样满足，而且省掉"哪些能并行"的判断；日常聊天一轮撑死三五个工具调用，并行省下的时间用户感知不到。真遇到慢工具再开并行。
 - [ ] 5-11 ~~`terminate` 多工具投票~~ **不做**：我们没有能要求终止对话的工具。
 - [ ] 5-12 工具执行前必过权限门（§7.3），拒绝也要**产生一条 tool result** 告诉模型"用户拒绝了"，不能静默跳过——否则模型看到工具调用没有结果，会重试到死。M2 做。
@@ -205,7 +207,7 @@ Dart 的 `Map` 是插入序，`jsonEncode` 按插入序输出——这意味着*
 ### 6.3 两家的缓存开关
 
 - [ ] 6-9 **Anthropic**：`cache_control: {type: "ephemeral"}`，最多四个落点，放在 §6.1 图里标的位置。长保留用 `ttl: "1h"`（需模型支持，走兼容标记）。落点数量超限 API 会直接报错，要有断言。
-- [ ] 6-10 **OpenAI**：`prompt_cache_key` 填**会话 id**（截断到 64 字符）。它的作用是把同一会话的请求路由到同一台缓存副本上；填随机值等于关掉缓存。配合 `prompt_cache_retention`（可用时）与 `store: false`。
+- [x] 6-10 **OpenAI**：`prompt_cache_key` 填**会话 id**（截断到 64 字符）。它的作用是把同一会话的请求路由到同一台缓存副本上；填随机值等于关掉缓存。配合 `prompt_cache_retention`（可用时）与 `store: false`。两个 openai 适配器都已按 `ModelCompat.supportsPromptCacheKey` 发出。
 - [ ] 6-11 OpenAI 兼容端点（DeepSeek / Kimi / GLM）有的接受 Anthropic 风格的 `cache_control`，有的自动缓存不需要参数。由 `ModelCompat.cache` 决定，不做探测（探测意味着不确定行为）。
 - [ ] 6-12 界面上要能看到 `cacheRead` / `cacheWrite` token（协议 §8 要求显示用量）。缓存有没有生效必须可观测，否则这一整节的工作无法验证。
 
@@ -245,11 +247,11 @@ abstract class WepTool {
 ```
 
 - [ ] 7-1 `prepareArguments` 容错，`execute` 严格。模型经常把数组塞成 JSON 字符串、把嵌套字段拍平——这些在 `prepareArguments` 里修。**等真见到模型传错再加对应的修法**，不预先按 pi 的清单全铺一遍：每一条容错都是在掩盖一种输入，不知道哪种真的会来就不知道该掩盖哪种。
-- [ ] 7-2 校验在**工具入口一次**完成（`AGENTS.md` §4）。第一版**不写通用 schema 校验器**：M2 只有六个文件工具，每个的参数就两三个字段，手写检查比写一个 150 行的校验器再用它检查六个工具更短也更好读。工具数过十个、或出现共享的复杂参数形状时再抽。
-- [ ] 7-3 `ToolResult` 四态必须能区分（`AGENTS.md` §4）：成功、业务失败（文件不存在）、被取消、权限拒绝。四态在界面上的呈现不同，合并成一个 bool 会丢信息。
+- [ ] 7-2 校验在**工具入口一次**完成（`../AGENTS.md` §4）。第一版**不写通用 schema 校验器**：M2 只有六个文件工具，每个的参数就两三个字段，手写检查比写一个 150 行的校验器再用它检查六个工具更短也更好读。工具数过十个、或出现共享的复杂参数形状时再抽。
+- [ ] 7-3 `ToolResult` 四态必须能区分（`../AGENTS.md` §4）：成功、业务失败（文件不存在）、被取消、权限拒绝。四态在界面上的呈现不同，合并成一个 bool 会丢信息。
 - [ ] 7-4 `execute` 每个 IO 步骤之间检查 `token.isCancelled`。长循环里也要检查。
 - [ ] 7-5 结果里除了给模型的 `content`，还带 `details`（diff、patch、命中行号），供界面渲染。给模型的文本要短，界面要的细节走 `details`。
-- [ ] 7-6 截断在**一处**实现（`AGENTS.md` §1.2）：一个 `truncate(text, limit, note)`，所有工具共用，输出统一带"已截断，原始 N 字符"。
+- [ ] 7-6 截断在**一处**实现（`../AGENTS.md` §1.2）：一个 `truncate(text, limit, note)`，所有工具共用，输出统一带"已截断，原始 N 字符"。
 
 ### 7.2 注册表
 
@@ -265,16 +267,16 @@ abstract class WepTool {
 
 ### 7.4 各工具（按里程碑排）
 
-- [ ] 7-13 M2 工作区路径基础设施：规范化、`..` 逃逸检测、符号链接、Windows 的 `\\?\` 与保留名（`CON`、`NUL`）、大小写不敏感。**只在这一层实现，各工具不重复写**（`AGENTS.md` §6.1）。
+- [ ] 7-13 M2 工作区路径基础设施：规范化、`..` 逃逸检测、符号链接、Windows 的 `\\?\` 与保留名（`CON`、`NUL`）、大小写不敏感。**只在这一层实现，各工具不重复写**（`../AGENTS.md` §6.1）。
 - [ ] 7-14 M2 `list_dir` / `search_files` / `read_file` / `write_file` / `edit_file` / `delete_file`。edit 参考 pi：BOM 剥离、行尾探测（CRLF/LF）与还原、匹配不到就报错**绝不猜**、写入过 mutation 队列串行化。
 - [ ] 7-15 M4 `web_search` / `web_fetch`。后端路由（Tavily / Brave / SearXNG / 模型原生）在**一处**选择；搜索配置与聊天模型配置独立（协议 §5）。`web_fetch` 只 GET，不接受模型给的 header / cookie / Authorization。
 - [ ] 7-16 M5 `run_js`（见 §8）。
-- [ ] 7-17 M6 `save_memory` / `list_memory` / `read_memory`。只有这三个能碰记忆存储，其他工具和 `run_js` 都不能（`AGENTS.md` §6.3）。
+- [ ] 7-17 M6 `save_memory` / `list_memory` / `read_memory`。只有这三个能碰记忆存储，其他工具和 `run_js` 都不能（`../AGENTS.md` §6.3）。
 - [ ] 7-18 M6 `gen_image` / `edit_image`。命名 `images/日期时间-短ID.png`，编辑产出新文件**绝不覆盖原图**（协议 §4）。
 
 ## 8. `runtime/`：`run_js`
 
-- [ ] 8-1 `abstract class WepJsRuntime`，QuickJS 是它的一个实现。所有 JS 执行只经这个抽象（`AGENTS.md` §6.4）。
+- [ ] 8-1 `abstract class WepJsRuntime`，QuickJS 是它的一个实现。所有 JS 执行只经这个抽象（`../AGENTS.md` §6.4）。
 - [ ] 8-2 **超时必须是真的中断**。`Future.timeout` 只是不再等结果，那个死循环还在烧 CPU（协议明确点出这一点）。正确做法是 `JS_SetInterruptHandler` + 一个被 Dart 侧设置的标志位，让引擎自己在字节码层面停下来。
 - [ ] 8-3 内存上限用 `JS_SetMemoryLimit`，栈上限用 `JS_SetMaxStackSize`。
 - [ ] 8-4 每次调用**全新 context**，不复用（协议 §6）。
@@ -286,41 +288,41 @@ abstract class WepTool {
 
 完整设计见 `WePChat-Flutter-会话存储设计.md`。这里只列施工项。
 
-- [ ] 9-1 DB isolate：长驻，持唯一写连接，请求经 `SendPort` 串行。UI isolate 不碰 sqlite（`AGENTS.md` §5.3）。
-- [ ] 9-2 建表 + `PRAGMA`（WAL / synchronous=NORMAL / foreign_keys=ON）+ `user_version` 迁移框架。降级时明确报错拒绝打开，不兼容读取。
-- [ ] 9-3 `entries` 追加：事务内 `head_seq + 1` 取号，同事务更新 `sessions` 的 `updated_at` / `preview` / `context_tokens` / `cost_total`。
-- [ ] 9-4 payload 编码三态：`json`（<4 KB）/ `gzip`（≥4 KB，用 `dart:io` 的 `GZipCodec`）/ `external`（≥256 KB，落 blob）。编解码一处实现。
-- [ ] 9-5 blob 层：sha256 内容寻址、`blobs` + `blob_refs`、GC（先删表行再删文件）。
-- [ ] 9-6 三条查询：`seq >= base_seq` 顺序全取（组装上下文）、尾部 N 条倒序（界面分页）、会话列表只读元信息列。
-- [ ] 9-7 `runs` 表 + 启动时扫 `finished_at IS NULL` 标为中断。
-- [ ] 9-8 助手消息在 `message_end` 落盘；**工具结果每个执行完立刻落盘**（存储文档 §6.1，理由是副作用已发生）。
-- [ ] 9-9 派生状态（模型 / 思考档位 / 工具集）回放实现；与 `sessions` 表缓存列不一致时报错，不静默用缓存（`AGENTS.md` §1.3）。
-- [ ] 9-10 truncate 条目支持编辑重发（存储文档 §8）。
-- [ ] 9-11 删除会话：软删 → 删 `blob_refs` → 清工作区目录（要确认用户意图，协议里工作区文件是用户产物）→ 硬删行。
-- [ ] 9-12 M0 结束时把 `lib/state/session_store.dart` 从内存 mock 切到真存储，**界面不改一行**。这是 M0 的验收标准。
+- [x] 9-1 DB isolate：长驻，持唯一写连接，请求经 `SendPort` 串行。UI isolate 不碰 sqlite（`../AGENTS.md` §5.3）。
+- [x] 9-2 建表 + `PRAGMA`（WAL / synchronous=NORMAL / foreign_keys=ON）+ `user_version` 迁移框架。降级时明确报错拒绝打开，不兼容读取。
+- [x] 9-3 `entries` 追加：事务内 `head_seq + 1` 取号，同事务更新 `sessions` 的 `updated_at` / `preview` / `context_tokens` / `cost_total`。
+- [x] 9-4 payload 编码三态：`json`（<4 KB）/ `gzip`（≥4 KB，用 `dart:io` 的 `GZipCodec`）/ `external`（≥256 KB，落 blob）。编解码一处实现。
+- [x] 9-5 blob 层：sha256 内容寻址、`blobs` + `blob_refs`、GC（先删表行再删文件）。
+- [x] 9-6 三条查询：`seq >= base_seq` 顺序全取（组装上下文）、尾部 N 条倒序（界面分页）、会话列表只读元信息列。
+- [x] 9-7 `runs` 表 + 启动时扫 `finished_at IS NULL` 标为中断。
+- [ ] 9-8 助手消息在 `message_end` 落盘；**工具结果每个执行完立刻落盘**（存储文档 §6.1，理由是副作用已发生）。助手侧已做（`SessionStore._persistAssistant`，流结束时一次写入）；**工具结果那半条等 M2 有工具了再做**。
+- [x] 9-9 派生状态（模型 / 思考档位 / 工具集）回放实现；与 `sessions` 表缓存列不一致时报错，不静默用缓存（`../AGENTS.md` §1.3）。
+- [ ] 9-10 truncate 条目支持编辑重发（存储文档 §8）。**未做**：`EntryType.truncate` 只有枚举值，没有写入路径，界面也还没有"编辑重发"入口。
+- [ ] 9-11 删除会话：软删 → 删 `blob_refs` → 清工作区目录（要确认用户意图，协议里工作区文件是用户产物）→ 硬删行。前三步里的删库部分已做；**工作区目录当前刻意不删**（删除弹窗明写"工作区文件不受影响"），要不要给一个"连同文件一起删"的选项待定。
+- [x] 9-12 M0 结束时把 `lib/state/session_store.dart` 从内存 mock 切到真存储，**界面不改一行**。这是 M0 的验收标准。
 
 ## 10. UI 接线
 
-- [ ] 10-1 `lib/models/` 的展示模型由领域模型派生。`ChatMessage.time` 这种展示字符串在派生时格式化，领域模型里存 epoch ms。
-- [ ] 10-2 `isUser` 换成 role 枚举——现在只有 user/assistant，加上 tool_result 后 bool 不够用了。
-- [ ] 10-3 界面只订阅 agent 事件（§5-6）。
-- [ ] 10-4 设置页接真实配置：provider / key / 模型目录 / 兼容标记 / 搜索后端 / 权限三态 / 记忆开关。key 存平台安全存储还是 DB？**待定，见 §13。**
-- [ ] 10-5 用量与费用显示（含 `cacheRead` / `cacheWrite`，§6-12）。
-- [ ] 10-6 中断按钮接 `CancellationToken`；"上次被中断，可重试"提示接 §9-7。
+- [ ] 10-1 `lib/models/` 的展示模型由领域模型派生。`ChatMessage.time` 这种展示字符串在派生时格式化，领域模型里存 epoch ms。**没做**：`time` 仍是格式化好的字符串，在 `SessionStore._timeLabel` 里生成。
+- [ ] 10-2 `isUser` 换成 role 枚举——现在只有 user/assistant，加上 tool_result 后 bool 不够用了。**M2 做**：纯聊天只有两种角色，bool 还够用；等第一个工具结果要进气泡时一起改。
+- [ ] 10-3 界面只订阅 agent 事件（§5-6）。改为：界面订阅 `SessionStore`，见 5-6。
+- [x] 10-4 设置页接真实配置：provider / key / 模型目录 / 兼容标记 / 搜索后端 / 权限三态 / 记忆开关。key 存 `settings.json`（§13.4 已定），界面只显示 `maskedKey`，永不显示明文。provider 增删改 + `/models` 拉取勾选 + 手动添加 + 逐个「发一句 hi」探活 + 逐模型兼容标记编辑都已可用。
+- [ ] 10-5 用量与费用显示（含 `cacheRead` / `cacheWrite`，§6-12）。**没做**：用量已随助手条目落库（`entries.usage_*`），但界面上还没有任何显示位。
+- [ ] 10-6 中断按钮接 `CancellationToken`；"上次被中断，可重试"提示接 §9-7。中断按钮已接（`SessionStore.stopGenerating`，部分文本以 `aborted` 落库）；**"上次被中断"提示没做**——`AppBootstrap.interruptedSessionIds` 取到了但没人读。
 - [ ] 10-7 现有的 HTML 预览 / 图片查看 / 文件查看页面接真实工作区文件。
 
 ## 11. 里程碑
 
-| 里程碑 | 内容 | 完成标准 |
-|---|---|---|
-| **M0** | `core/` + `storage/` + DB isolate + 迁移 | 现有界面跑在真存储上，重启后会话仍在，界面代码零改动 |
-| **M1** | 三个适配器（completions / responses / messages）+ 设置页配 provider 与 key + loop 接线（空工具表） | 无工具的纯聊天流式跑通，可中断，用量能看到 |
-| **M2** | 工具注册 + 权限门 + 工作区文件工具 | 能让模型读写工作区文件，权限三态生效，写操作串行 |
-| **M3** | 缓存策略 + 压缩 | 界面能看到 cacheRead > 0；长会话自动压缩不报错 |
-| **M4** | `web_search` / `web_fetch` + 搜索后端 | 至少一个后端能用 |
-| **M5** | QuickJS + `run_js` | 死循环脚本能被真中断（不是超时放手） |
-| **M6** | 记忆 + `gen_image` / `edit_image` | 记忆三态开关生效；图片不覆盖 |
-| **P1** | 协议 §11 的 P1 项 | — |
+| 里程碑 | 内容 | 完成标准 | 状态 |
+|---|---|---|---|
+| **M0** | `core/` + `storage/` + DB isolate + 迁移 | 现有界面跑在真存储上，重启后会话仍在，界面代码零改动 | 完成 |
+| **M1** | 三个适配器（completions / responses / messages）+ 设置页配 provider 与 key + loop 接线（空工具表） | 无工具的纯聊天流式跑通，可中断，用量能看到 | 完成（用量显示欠着，见 10-5） |
+| **M2** | 工具注册 + 权限门 + 工作区文件工具 | 能让模型读写工作区文件，权限三态生效，写操作串行 | 下一个 |
+| **M3** | 缓存策略 + 压缩 | 界面能看到 cacheRead > 0；长会话自动压缩不报错 | — |
+| **M4** | `web_search` / `web_fetch` + 搜索后端 | 至少一个后端能用 | — |
+| **M5** | QuickJS + `run_js` | 死循环脚本能被真中断（不是超时放手） | — |
+| **M6** | 记忆 + `gen_image` / `edit_image` | 记忆三态开关生效；图片不覆盖 | — |
+| **P1** | 协议 §11 的 P1 项 | — | — |
 
 顺序理由：存储在最前面，因为它是唯一"错了要迁移数据"的部分——晚改代价最大。
 
@@ -330,7 +332,7 @@ abstract class WepTool {
 
 ## 12. 每个里程碑的检查
 
-代理能跑的只有两条（`AGENTS.md` §9）：
+代理能跑的只有两条（`../AGENTS.md` §9）：
 
 - [ ] 12-1 `dart format --set-exit-if-changed .`
 - [ ] 12-2 `flutter analyze`
@@ -340,7 +342,7 @@ abstract class WepTool {
 - [ ] 12-3 `flutter test`（含 §6-8 的字节稳定性测试）
 - [ ] 12-4 Android 真机：四个 ABI 装得上、SQLite native 库能加载
 - [ ] 12-5 Windows Release 打包：sqlite3.dll 打进产物
-- [ ] 12-6 真实 API 联通：能聊天、用量显示正确。`cacheRead > 0` 的验证挪到 M3（缓存策略在那时才做）
+- [ ] 12-6 真实 API 联通：能聊天、用量显示正确。`cacheRead > 0` 的验证挪到 M3（缓存策略在那时才做）。**M1 已验一半**：用户实测三种协议的纯聊天与中断均正常；用量显示还没做（10-5）。
 - [ ] 12-7 杀进程恢复：生成中途杀掉，重启后中断提示出现
 - [ ] 12-8 至少验 401 与断网两条失败路径的界面表现。429 / 超时靠代码走同一条错误通道（`http_transport.dart` 的 `_toError`），不单独构造
 

@@ -75,8 +75,9 @@ List<ContentBlock> parseMarkdownBlocks(String text) {
       continue;
     }
 
-    // 表格：| 开头且下一行是分隔行。
-    if (line.trimLeft().startsWith('|') && i + 1 < lines.length) {
+    // 表格：`|` 开头且下一行是分隔行。没有分隔行的一串竖线不是表格，
+    // 落到下面的段落分支。
+    if (_startsTable(lines, i)) {
       final _TableRun? table = _parseTable(lines, i);
       if (table != null) {
         blocks.add(TableBlock(table.head, table.rows));
@@ -268,6 +269,16 @@ bool _isTableSeparator(String line) {
 
 // ────────────────── 段落 ──────────────────
 
+/// 这一行是不是一个表格的开头（有表头也有分隔行）。
+///
+/// 段落收集要用它而不是"以 `|` 开头"：一串竖线但没有分隔行的行不是表格，
+/// 按"是表格"断开会把用户写的一段话拆成好几个段落。
+bool _startsTable(List<String> lines, int index) {
+  if (!lines[index].trimLeft().startsWith('|')) return false;
+  if (index + 1 >= lines.length) return false;
+  return _isTableSeparator(lines[index + 1]);
+}
+
 _TextRun _collectParagraph(List<String> lines, int start) {
   final List<String> texts = <String>[lines[start]];
   int i = start + 1;
@@ -281,7 +292,7 @@ _TextRun _collectParagraph(List<String> lines, int start) {
         line.trimLeft().startsWith('>') ||
         _isUnorderedListItem(line) ||
         _isOrderedListItem(line) ||
-        line.trimLeft().startsWith('|')) {
+        _startsTable(lines, i)) {
       break;
     }
     texts.add(line);
