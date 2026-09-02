@@ -4,6 +4,7 @@ import '../platform/workspace_paths.dart';
 import '../state/app_settings.dart';
 import '../state/session_store.dart';
 import '../storage/storage.dart';
+import '../tools/permission_gate.dart';
 
 /// 应用启动时的异步初始化任务。
 ///
@@ -23,15 +24,21 @@ class AppBootstrap {
   final AppSettings settings;
   final SessionStore sessions;
 
-  /// 启动时发现未正常结束的会话 id（实施 TODO §6.2）。
+  /// 启动时发现未正常结束的会话 id（实施 TODO §6.2、§10-6）。
   ///
-  /// 界面据此显示"上次回复被中断，可重试"。M0 只是取到手，接 agent 之后才用。
+  /// 界面据此显示"上次回复被中断，可重试"。
   final List<String> interruptedSessionIds;
 
   /// 打开存储、标记中断的 run、装载会话列表。
   ///
   /// [rootOverride] 仅用于测试——生产代码传 null，让它调 `path_provider`。
-  static Future<AppBootstrap> init({String? rootOverride}) async {
+  ///
+  /// [permissionPrompt] 是「询问」档位的弹窗入口。`main()` 传，因为它拿得到
+  /// navigator；不传就没有确认界面，`ask` 一律按拒绝处理（见 `PermissionGate`）。
+  static Future<AppBootstrap> init({
+    String? rootOverride,
+    PermissionPrompt? permissionPrompt,
+  }) async {
     final AppPaths paths = rootOverride == null
         ? await AppPaths.resolve()
         : AppPaths.fromPath(rootOverride);
@@ -59,7 +66,11 @@ class AppBootstrap {
       storage: storage,
       workspaces: workspaces,
       settings: settings,
+      permissionPrompt: permissionPrompt,
     );
+    // 中断提示交给会话状态，界面从那里读（§10-6）。留在 bootstrap 上的
+    // 那份只是原始结果，没人订阅它。
+    sessions.markInterrupted(interrupted);
 
     return AppBootstrap._(
       storage: storage,

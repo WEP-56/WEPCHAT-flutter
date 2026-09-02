@@ -6,8 +6,29 @@
 /// 就废掉整个 prompt 缓存（§7.1），实现改多少次都没事。
 library;
 
-import '../core/cancellation_token.dart';
 import '../ai/provider_api.dart';
+import '../core/cancellation_token.dart';
+import '../platform/workspace_guard.dart';
+
+/// 一次工具执行的收场方式（实施 TODO §7-3）。
+///
+/// 四态不能压成一个 bool：界面上成功是对勾、业务失败是红色叹号、被取消是
+/// 灰掉、被拒绝要显示"是你拒的"。合并之后这四种都长一个样，用户看不出
+/// 该去改设置还是该换个说法重问（AGENTS.md §4）。
+enum ToolOutcome {
+  /// 干成了。
+  ok,
+
+  /// 业务失败：文件不存在、参数不对、路径越界。模型可以据此改正重试。
+  failed,
+
+  /// 用户中断。不是谁的错，重试也没意义——用户就是不想让它跑。
+  cancelled,
+
+  /// 权限门拒绝（§7-12）。要让模型知道是被拒了而不是失败了，
+  /// 否则它会换个参数一遍遍重试同一件事。
+  denied,
+}
 
 /// 工具执行结果。
 ///
@@ -17,7 +38,7 @@ import '../ai/provider_api.dart';
 class ToolResult {
   const ToolResult({
     required this.content,
-    this.isError = false,
+    this.outcome = ToolOutcome.ok,
     this.uiPayload,
   });
 
@@ -26,21 +47,37 @@ class ToolResult {
     return ToolResult(content: content, uiPayload: uiPayload);
   }
 
-  /// 失败结果。[content] 要写成模型能据此改正的话，不是给人看的堆栈。
+  /// 业务失败。[content] 要写成模型能据此改正的话，不是给人看的堆栈。
   factory ToolResult.error(String content) {
-    return ToolResult(content: content, isError: true);
+    return ToolResult(content: content, outcome: ToolOutcome.failed);
+  }
+
+  /// 被用户中断。
+  factory ToolResult.cancelled([String content = '执行被用户中断']) {
+    return ToolResult(content: content, outcome: ToolOutcome.cancelled);
+  }
+
+  /// 被权限门拒绝。
+  factory ToolResult.denied(String content) {
+    return ToolResult(content: content, outcome: ToolOutcome.denied);
   }
 
   /// 回传给模型的文本。
   final String content;
 
-  final bool isError;
+  final ToolOutcome outcome;
 
   /// 只给界面用的结构化数据（比如 diff、文件树），不进请求体。
   ///
   /// 分开是因为界面想要结构，模型只要文本——把 JSON 塞给模型既浪费 token
   /// 又不如自然语言好懂。
   final Map<String, Object?>? uiPayload;
+
+  /// 进 `tool_result` 的 `is_error` 字段。
+  ///
+  /// 四态到线上只剩两态是协议决定的（各家的 tool_result 就只有一个布尔），
+  /// 但四态在进程内一路保留到界面。
+  bool get isError => outcome != ToolOutcome.ok;
 }
 
 /// 工具执行时能拿到的环境。
@@ -50,18 +87,22 @@ class ToolResult {
 class ToolContext {
   const ToolContext({
     required this.sessionId,
-    required this.workspaceRoot,
+    required this.workspace,
     required this.token,
   });
 
   final String sessionId;
 
-  /// 这个会话的工作区根目录。文件类工具必须把路径限制在这个目录内
-  /// （§7-4 的越界检查）。
-  final String workspaceRoot;
+  /// 这个会话工作区的路径守卫。
+  ///
+  /// 带的是守卫而不是根目录字符串：拿到字符串的工具会忍不住自己拼路径，
+  /// 而越界检查只能有一处实现（§7-13、AGENTS.md §6.1）。
+  final WorkspaceGuard workspace;
 
   /// 用户中断时会被取消。长操作要在关键点检查（§3-1）。
   final CancellationToken token;
+
+  String get workspaceRoot => workspace.root;
 }
 
 /// 一个工具。
@@ -73,12 +114,16 @@ abstract class Tool {
 
   String get name => definition.name;
 
-  /// 执行是否需要用户确认（§7-6）。
+  /// 这个工具受哪一条权限设置管（`kToolPermissionSpecs` 里的 id）。
   ///
-  /// 读类工具返回 false，写类和执行命令类返回 true。判断放在工具自己身上
-  /// 而不是调用方的 if-else：新加一个工具时忘了改那串 if-else，就等于默认
-  /// 放行，而默认放行的错误方向是不可逆的。
-  bool get requiresApproval => false;
+  /// 多个工具共用一条设置是有意的：用户想的是"能不能改我的文件"，
+  /// 不是"write_file 能不能、edit_file 能不能"，所以两者都指向
+  /// `write_file` 这一档。
+  ///
+  /// 放在工具自己身上而不是调用方的 if-else：新加一个工具时忘了改那串
+  /// if-else，就等于默认放行，而默认放行的错误方向是不可逆的。默认值
+  /// 取工具名，查不到对应设置时权限门按「询问」处理（见 `PermissionGate`）。
+  String get permissionId => name;
 
   /// 执行。
   ///

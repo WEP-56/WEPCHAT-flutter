@@ -250,6 +250,8 @@ List<String> _parseTableRow(String line) {
   if (!trimmed.startsWith('|') || !trimmed.endsWith('|')) {
     return const <String>[];
   }
+  // 流式生成时可能只有一个 `|`，length - 1 会是 0，substring(1, 0) 就炸了。
+  if (trimmed.length < 2) return const <String>[];
   final String inner = trimmed.substring(1, trimmed.length - 1);
   return inner.split('|').map((String s) => s.trim()).toList();
 }
@@ -257,6 +259,8 @@ List<String> _parseTableRow(String line) {
 bool _isTableSeparator(String line) {
   final String trimmed = line.trim();
   if (!trimmed.startsWith('|') || !trimmed.endsWith('|')) return false;
+  // 流式生成时可能只有一个 `|`。
+  if (trimmed.length < 2) return false;
   final String inner = trimmed.substring(1, trimmed.length - 1);
   final List<String> parts = inner.split('|');
   for (final String part in parts) {

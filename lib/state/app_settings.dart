@@ -227,6 +227,15 @@ class AppSettings extends ChangeNotifier {
     return value;
   }
 
+  /// 查不到就当「询问」的版本，给权限门用（§7-10）。
+  ///
+  /// [permissionOf] 对未知 id 抛异常是给设置界面用的——那里的 id 是常量，
+  /// 拼错了该立刻炸。但权限门查的是工具自报的 id，一个新工具忘了声明
+  /// 不该让整轮对话崩掉；退到「询问」既不静默放行，用户也能看见。
+  ToolPermission permissionOrAsk(String toolId) {
+    return _permissions[toolId] ?? ToolPermission.ask;
+  }
+
   void setThemeMode(ThemeMode mode) {
     if (_themeMode == mode) return;
     _themeMode = mode;

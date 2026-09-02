@@ -28,7 +28,7 @@ const ChatSession kCoverSession = ChatSession(
   messages: <ChatMessage>[
     ChatMessage(
       id: 's3-m1',
-      isUser: true,
+      role: ChatRole.user,
       time: '09:41',
       blocks: <ContentBlock>[
         ParagraphBlock('做一张公众号封面，主题是清晨的咖啡店，暖色调，横版，留一点空白放标题。'),
@@ -36,7 +36,7 @@ const ChatSession kCoverSession = ChatSession(
     ),
     ChatMessage(
       id: 's3-m2',
-      isUser: false,
+      role: ChatRole.assistant,
       time: '09:44',
       tools: <ToolCall>[
         ToolCall(
@@ -60,13 +60,13 @@ const ChatSession kCoverSession = ChatSession(
     ),
     ChatMessage(
       id: 's3-m3',
-      isUser: true,
+      role: ChatRole.user,
       time: '09:49',
       blocks: <ContentBlock>[ParagraphBlock('光线再暖一点，杯子往右移一些，其他保持不变。')],
     ),
     ChatMessage(
       id: 's3-m4',
-      isUser: false,
+      role: ChatRole.assistant,
       time: '09:52',
       tools: <ToolCall>[
         ToolCall(

@@ -2,32 +2,38 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../agent/agent_loop.dart';
 import '../ai/messages.dart' as ai;
 import '../ai/model_catalog.dart';
 import '../ai/provider_api.dart';
 import '../ai/provider_config.dart';
 import '../ai/provider_factory.dart';
-import '../ai/stream_event.dart';
 import '../core/cancellation_token.dart';
 import '../core/errors.dart';
 import '../core/ulid.dart';
 import '../models/chat.dart';
 import '../models/content.dart';
 import '../models/markdown_blocks.dart';
+import '../models/tool_call.dart';
 import '../models/workspace.dart';
+import '../platform/workspace_guard.dart';
 import '../platform/workspace_paths.dart';
 import '../storage/storage.dart';
+import '../tools/permission_gate.dart';
+import '../tools/tool_registry.dart';
+import '../tools/tool_summary.dart';
 import 'app_settings.dart';
-import 'chat_turn.dart';
+import 'tool_display.dart';
+import 'turn_runner.dart';
 
-/// 会话列表与当前会话的可变状态，背后是真存储（实施 TODO §9-12、M1）。
+/// 会话列表与当前会话的可变状态，背后是真存储（实施 TODO §9-12、M1、M2）。
 ///
 /// 构造前必须先 [load]：会话列表在首帧之前就绪，界面不需要处理"加载中"
 /// 状态，也就不需要为接存储改一行 UI 代码。
 ///
-/// M1 起 [sendMessage] 会真的发请求：解析会话模型 → 建适配器 → 流式接收 →
-/// 落库。**不走 `AgentLoop`**——纯聊天路径只需要适配器，先把这条链路验通，
-/// 工具、权限、循环留到之后接（用户定的顺序）。
+/// M2 起 [sendMessage] 走 `AgentLoop`：模型可以调工具，工具经权限门，
+/// 结果每个执行完立刻落库。M1 那条"直接消费 `api.stream`"的捷径已经拆掉
+/// ——两条链路并存的话，工具、权限、迭代上限这些规矩就得在两处各写一遍。
 class SessionStore extends ChangeNotifier {
   SessionStore._({
     required WepStorage storage,
@@ -35,20 +41,27 @@ class SessionStore extends ChangeNotifier {
     required AppSettings settings,
     required List<ChatSession> sessions,
     required String activeId,
+    required PermissionGate gate,
   })  : _storage = storage,
         _workspaces = workspaces,
         _settings = settings,
         _sessions = sessions,
-        _activeId = activeId;
+        _activeId = activeId,
+        _gate = gate;
 
   /// 打开存储里的会话列表，必要时补一个空会话。
   ///
   /// 默认模型取自 [settings]，可能为 null——用户还没配任何 provider 时就是
   /// 这种状态，会话照样能建，点发送时才提示。
+  ///
+  /// [permissionPrompt] 是「询问」档位的弹窗入口，由界面在 `main` 里接上。
+  /// 不传就没有确认界面，`ask` 一律按拒绝处理（见 `PermissionGate`）——
+  /// headless 测试就是这种情况。
   static Future<SessionStore> load({
     required WepStorage storage,
     required WorkspaceRoots workspaces,
     required AppSettings settings,
+    PermissionPrompt? permissionPrompt,
   }) async {
     final List<ChatSession> sessions = await _loadAll(storage);
 
@@ -72,6 +85,7 @@ class SessionStore extends ChangeNotifier {
       settings: settings,
       sessions: sessions,
       activeId: sessions.first.id,
+      gate: PermissionGate(settings: settings, prompt: permissionPrompt),
     );
   }
 
@@ -97,6 +111,7 @@ class SessionStore extends ChangeNotifier {
   final WepStorage _storage;
   final WorkspaceRoots _workspaces;
   final AppSettings _settings;
+  final PermissionGate _gate;
   List<ChatSession> _sessions;
   String _activeId;
 
@@ -111,6 +126,35 @@ class SessionStore extends ChangeNotifier {
   /// 配置类失败（没配 key、没有模型）走这里而不是落库：它们不是对话内容，
   /// 写进历史会永远留在记录里，用户改完设置也擦不掉。
   String? _notice;
+
+  /// 最近一轮的累计用量（实施 TODO §10-5、§6-12）。
+  ///
+  /// 只留最近一轮而不是全会话累计：全会话的量要从 `entries.usage_*` 汇总，
+  /// 那是一次查询，等 M3 做成本统计时一起做。现在界面要的是"刚才这轮花了
+  /// 多少"，尤其是 `cacheRead` 有没有生效。
+  ai.TokenUsage? _lastUsage;
+
+  ai.TokenUsage? get lastUsage => _lastUsage;
+
+  /// 上次退出时正在生成、没能正常结束的会话（实施 TODO §10-6、§9-7）。
+  ///
+  /// 由 `AppBootstrap` 在启动时扫出来交进来。只做提示不自动重发（§13.5 已定）：
+  /// 用户可能就是故意杀掉的，替他重发一次要花钱。
+  final Set<String> _interrupted = <String>{};
+
+  bool get activeWasInterrupted => _interrupted.contains(_activeId);
+
+  void markInterrupted(Iterable<String> sessionIds) {
+    _interrupted
+      ..clear()
+      ..addAll(sessionIds);
+    notifyListeners();
+  }
+
+  /// 用户看过提示了，或者已经重新发过消息。
+  void clearInterrupted(String sessionId) {
+    if (_interrupted.remove(sessionId)) notifyListeners();
+  }
 
   List<ChatSession> get sessions => List<ChatSession>.unmodifiable(_sessions);
   String get activeId => _activeId;
@@ -164,6 +208,9 @@ class SessionStore extends ChangeNotifier {
       throw ArgumentError.value(id, 'id', '会话不存在');
     }
     await _storage.deleteSession(id);
+    // 「本会话内一直允许」跟着会话走。不清的话，id 万一被复用，
+    // 新会话会凭空继承一份授权。
+    _gate.forgetSession(id);
     _sessions = _sessions.where((ChatSession s) => s.id != id).toList();
 
     if (_sessions.isEmpty) {
@@ -204,6 +251,9 @@ class SessionStore extends ChangeNotifier {
     final ChatSession session = active;
     final bool isFirst = session.messages.isEmpty;
 
+    // 用户又发话了，"上次被中断"这条提示就过期了。
+    clearInterrupted(session.id);
+
     await _storage.appendEntry(
       session.id,
       NewEntry(
@@ -235,7 +285,7 @@ class SessionStore extends ChangeNotifier {
 
   // ───────────────────────── 生成 ─────────────────────────
 
-  /// 解析模型与 provider，跑一轮请求。
+  /// 解析模型与 provider，跑一轮 agent 循环。
   ///
   /// 配置类失败（模型没了、provider 没了、没配 key）只发 [_notice]，不落库。
   Future<void> _generate(String sessionId, String modelKey) async {
@@ -274,7 +324,7 @@ class SessionStore extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _streamReply(
+      await _runTurn(
         api: api,
         model: model,
         sessionId: sessionId,
@@ -288,11 +338,77 @@ class SessionStore extends ChangeNotifier {
     }
   }
 
+  /// 建 loop、跑一轮、收场。
+  Future<void> _runTurn({
+    required ProviderApi api,
+    required ModelSpec model,
+    required String sessionId,
+    required List<ai.ChatMessageModel> history,
+    required String runId,
+    required CancellationToken token,
+  }) async {
+    final AgentLoop loop = AgentLoop(
+      api: api,
+      tools: ToolRegistry(kWorkspaceTools, gate: _gate),
+      config: AgentConfig(
+        model: model,
+        sessionId: sessionId,
+        workspace: WorkspaceGuard(_workspaces.ensureSession(sessionId)),
+        systemPrompt: _systemPrompt(sessionId),
+        maxOutputTokens: model.maxOutputTokens,
+        // o 系列拒收 temperature，靠模型的兼容开关决定发不发（§4.2）。
+        temperature:
+            model.compat.supportsTemperature ? _settings.temperature : null,
+      ),
+    );
+
+    final TurnRunner runner = TurnRunner(
+      storage: _storage,
+      sessionId: sessionId,
+      paint: (TurnDraft draft) => _paintDraft(sessionId, draft),
+    );
+
+    final TurnResult result;
+    try {
+      result = await runner.run(loop, history, token);
+    } on Object catch (e) {
+      // loop 承诺不抛（§5），这里只是兜底：真抛了也不能让 run 悬着。
+      _notice = '生成失败：$e';
+      await _storage.finishRun(runId, RunOutcome.error);
+      await _reload(sessionId);
+      return;
+    }
+
+    if (result.notice != null) _notice = result.notice;
+    _lastUsage = runner.usage;
+    await _storage.finishRun(runId, result.outcome);
+    await _reload(sessionId);
+  }
+
+  /// 本轮的 system prompt。
+  ///
+  /// 告诉模型工作区在哪、路径怎么写。不写绝对路径：那里面有用户名和真实
+  /// 目录结构，不该进模型上下文（AGENTS.md §5.1）；工具收的本来也是相对
+  /// 路径。
+  String _systemPrompt(String sessionId) {
+    return '你是 WePChat 里的助手，用中文回答。\n'
+        '你有一个属于当前会话的工作区，文件工具的 path 参数一律用相对'
+        '工作区根的相对路径（如 `notes.md`、`src/main.js`），不要用绝对路径，'
+        '也不能访问工作区外的任何位置。\n'
+        '改文件之前先 read_file 看清原文；edit_file 的 find 必须逐字一致。';
+  }
+
   /// 把存储里的历史条目翻成请求用的消息列表。
   ///
   /// 从 `base_seq` 起读（压缩之后只发摘要以后的部分），并丢掉 error /
   /// aborted 的轮次——半句话和没有结果的调用留在上下文里只会误导模型
   /// （§6-14）。
+  ///
+  /// **工具结果不回放**。落库是为了崩溃恢复和界面显示（存储设计 §6.1），
+  /// 但要把它们放回请求里，得连同产生它们的那条 assistant 消息的
+  /// `tool_use` 块一起放回去——缺一个配对，API 直接拒（§5-6）。而
+  /// `tool_use` 的原始块现在没有落库。这一条留给 M3：那时要做缓存前缀，
+  /// 本来就得把 assistant 的 parts 完整存下来。
   Future<List<ai.ChatMessageModel>> _readHistory(String sessionId) async {
     final List<EntryRecord> entries = await _storage.readContext(sessionId);
     final List<ai.ChatMessageModel> history = <ai.ChatMessageModel>[];
@@ -306,8 +422,8 @@ class SessionStore extends ChangeNotifier {
         case EntryRole.user:
           if (text.isNotEmpty) history.add(ai.ChatMessageModel.user(text));
         case EntryRole.assistant:
-          // thinking 不回传：跨模型时别人的思考块会被拒（§6-15），而纯聊天
-          // 路径下重放自己的思考也没有收益。正文为空的轮次直接跳过。
+          // thinking 不回传：跨模型时别人的思考块会被拒（§6-15），而重放
+          // 自己的思考也没有收益。正文为空的轮次直接跳过。
           if (text.isEmpty) continue;
           history.add(
             ai.ChatMessageModel(
@@ -323,85 +439,24 @@ class SessionStore extends ChangeNotifier {
     return history;
   }
 
-  /// 消费事件流，边收边重绘，结束时落库。
-  Future<void> _streamReply({
-    required ProviderApi api,
-    required ModelSpec model,
-    required String sessionId,
-    required List<ai.ChatMessageModel> history,
-    required String runId,
-    required CancellationToken token,
-  }) async {
-    final ProviderRequest request = ProviderRequest(
-      model: model,
-      messages: history,
-      tools: const <ToolDefinition>[],
-      maxOutputTokens: model.maxOutputTokens,
-      // o 系列拒收 temperature，靠模型的兼容开关决定发不发（§4.2）。
-      temperature:
-          model.compat.supportsTemperature ? _settings.temperature : null,
-      sessionId: sessionId,
-    );
-
-    // 流式气泡的 id 只生成一次：每帧换 id 会让 ListView 认为是新元素，
-    // 打字过程中整条消息会闪。
-    final String bubbleId = Ulid.generate();
-    ai.ChatMessageModel? last;
-
-    try {
-      await for (final StreamEvent event in api.stream(request, token)) {
-        last = event.message;
-        _paintStreaming(sessionId, bubbleId, event.message);
-      }
-    } on Object catch (e) {
-      // 适配器承诺不抛（§4-2），这里只是兜底：真抛了也不能让 run 悬着。
-      _notice = '生成失败：$e';
-      await _storage.finishRun(runId, RunOutcome.error);
-      await _reload(sessionId);
-      return;
-    }
-
-    if (last == null) {
-      _notice = '没有收到任何响应';
-      await _storage.finishRun(runId, RunOutcome.error);
-      await _reload(sessionId);
-      return;
-    }
-
-    final ai.StopReason reason = last.stopReason ?? ai.StopReason.stop;
-
-    // 一个字都没吐出来就被中断：不留空气泡，直接当这一轮没发生过。
-    if (reason == ai.StopReason.aborted && last.text.trim().isEmpty) {
-      await _storage.finishRun(runId, RunOutcome.aborted);
-      await _reload(sessionId);
-      return;
-    }
-
-    await _persistAssistant(sessionId, last, reason);
-    await _storage.finishRun(runId, _outcomeOf(reason));
-    await _reload(sessionId);
-  }
-
-  /// 把 partial 消息画到界面上。
+  /// 把当前草稿画到界面上。
   ///
   /// 只改内存里的那一条，不落库——流式过程中每个 delta 都写一次库既慢又
-  /// 违反"条目写入即不可变"（存储设计 §7.1）。落库在流结束时一次完成。
-  void _paintStreaming(
-    String sessionId,
-    String bubbleId,
-    ai.ChatMessageModel message,
-  ) {
+  /// 违反"条目写入即不可变"（存储设计 §7.1）。落库由 `TurnRunner` 按
+  /// 各自的时机做。
+  void _paintDraft(String sessionId, TurnDraft draft) {
     final int index = _sessions.indexWhere((ChatSession s) => s.id == sessionId);
     if (index < 0) return;
 
     final ChatSession session = _sessions[index];
     final ChatMessage bubble = ChatMessage(
-      id: bubbleId,
-      isUser: false,
+      id: draft.bubbleId,
+      role: ChatRole.assistant,
       time: _timeLabel(DateTime.now()),
+      tools: draft.tools,
       blocks: _blocksOf(
-        text: message.text,
-        thinking: message.thinkingText,
+        text: draft.text,
+        thinking: draft.thinking,
         error: null,
       ),
       isStreaming: true,
@@ -411,55 +466,11 @@ class SessionStore extends ChangeNotifier {
       ..[index] = session.copyWith(
         messages: <ChatMessage>[
           for (final ChatMessage m in session.messages)
-            if (m.id != bubbleId) m,
+            if (m.id != draft.bubbleId) m,
           bubble,
         ],
       );
     notifyListeners();
-  }
-
-  /// 落一条助手消息。
-  ///
-  /// `stopReason` 进独立的列而不是 payload：出错和被中断的轮次要在不解析
-  /// payload 的前提下排除出上下文（`EntryRecord.isUsableInContext`）。
-  Future<void> _persistAssistant(
-    String sessionId,
-    ai.ChatMessageModel message,
-    ai.StopReason reason,
-  ) async {
-    final String text = message.text;
-    final String thinking = message.thinkingText;
-
-    final Map<String, Object?> payload = <String, Object?>{'text': text};
-    if (thinking.isNotEmpty) payload['thinking'] = thinking;
-    // 失败原因写进 payload 而不是丢掉：用户要看得见"为什么没回复"，
-    // 而这条消息本身已经被 stopReason 挡在下次请求之外了。
-    if (message.errorMessage != null) payload['error'] = message.errorMessage;
-
-    await _storage.appendEntry(
-      sessionId,
-      NewEntry(
-        id: Ulid.generate(),
-        type: EntryType.message,
-        role: EntryRole.assistant,
-        payload: payload,
-        tokenEst: message.usage.outputTokens,
-        stopReason: toStorageStopReason(reason),
-        usage: toStorageTokenUsage(message.usage),
-      ),
-      preview: text.isEmpty ? (message.errorMessage ?? '生成失败') : text,
-    );
-  }
-
-  static RunOutcome _outcomeOf(ai.StopReason reason) {
-    return switch (reason) {
-      ai.StopReason.error => RunOutcome.error,
-      ai.StopReason.aborted => RunOutcome.aborted,
-      ai.StopReason.stop ||
-      ai.StopReason.toolUse ||
-      ai.StopReason.length =>
-        RunOutcome.completed,
-    };
   }
 
   /// 配置类失败：只提示，不落库、不建 run。
@@ -526,10 +537,84 @@ class SessionStore extends ChangeNotifier {
       // 会话还在，这时显示原始键比显示空白有用。
       model: record.modelId,
       files: const <WorkspaceFile>[],
-      messages: <ChatMessage>[
-        for (final EntryRecord e in entries)
-          if (e.type == EntryType.message) _toChatMessage(e),
-      ],
+      messages: _toChatMessages(entries),
+    );
+  }
+
+  /// 条目列表 → 气泡列表。
+  ///
+  /// 工具结果不占独立气泡，而是挂到**紧邻的下一条助手消息**上：那条消息
+  /// 就是模型看完工具结果之后说的话，两者属于同一个动作。没有后继助手
+  /// 消息时（模型只调了工具就被中断）自成一条，否则那次调用在界面上就
+  /// 凭空消失了。
+  static List<ChatMessage> _toChatMessages(List<EntryRecord> entries) {
+    final List<ChatMessage> out = <ChatMessage>[];
+    final List<ToolCall> pending = <ToolCall>[];
+
+    for (final EntryRecord entry in entries) {
+      if (entry.type != EntryType.message) continue;
+
+      if (entry.role == EntryRole.toolResult) {
+        pending.add(_toToolCall(entry));
+        continue;
+      }
+
+      final ChatMessage message = _toChatMessage(entry);
+      if (pending.isEmpty || entry.role == EntryRole.user) {
+        // 用户消息不该带上一轮的工具卡片。把攒着的先单独放出去。
+        if (pending.isNotEmpty) {
+          out.add(_toolOnlyMessage(pending));
+          pending.clear();
+        }
+        out.add(message);
+        continue;
+      }
+
+      out.add(message.copyWith(tools: List<ToolCall>.of(pending)));
+      pending.clear();
+    }
+
+    if (pending.isNotEmpty) out.add(_toolOnlyMessage(pending));
+    return out;
+  }
+
+  /// 只有工具卡片、没有正文的一条。
+  static ChatMessage _toolOnlyMessage(List<ToolCall> tools) {
+    return ChatMessage(
+      id: tools.first.id,
+      role: ChatRole.toolResult,
+      time: '',
+      tools: List<ToolCall>.of(tools),
+    );
+  }
+
+  /// 落库的工具结果 → 卡片。
+  ///
+  /// 和执行时那张卡片走同一套 `toolKindOf` / `toolTitleOf`
+  /// （`tool_display.dart`），刷新前后长得一样。
+  static ToolCall _toToolCall(EntryRecord entry) {
+    final String name = entry.payload['name'] as String? ?? '未知工具';
+    final String content = entry.payload['content'] as String? ?? '';
+    final String outcome = entry.payload['outcome'] as String? ?? 'ok';
+    final Object? rawArgs = entry.payload['arguments'];
+
+    final String firstLine = content.split('\n').first.trim();
+    final String prefix = switch (outcome) {
+      'failed' => '失败：',
+      'cancelled' => '已中断：',
+      'denied' => '已拒绝：',
+      _ => '',
+    };
+
+    return ToolCall(
+      id: entry.id,
+      kind: toolKindOf(name),
+      title: toolTitleOf(name),
+      meta: rawArgs is Map<String, Object?>
+          ? summarizeToolArguments(rawArgs)
+          : null,
+      detail: '$prefix${firstLine.length <= 120 ? firstLine : '${firstLine.substring(0, 120)}…'}',
+      status: outcome == 'ok' ? ToolStatus.done : ToolStatus.failed,
     );
   }
 
@@ -539,7 +624,7 @@ class SessionStore extends ChangeNotifier {
 
     return ChatMessage(
       id: entry.id,
-      isUser: isUser,
+      role: isUser ? ChatRole.user : ChatRole.assistant,
       time: _timeLabel(entry.createdAt),
       // 用户消息不解析 Markdown：用户打的 `-` 开头是破折号，不是列表。
       blocks: isUser

@@ -35,10 +35,16 @@ class HtmlRef {
   final String desc;
 }
 
+/// 聊天里一条消息的角色（实施 TODO §10-2）。
+///
+/// 不用 bool `isUser`：加上工具结果之后就有三种了，而 bool 只能表达两种。
+/// 换成枚举是 M2 做的——越晚改牵连越多。
+enum ChatRole { user, assistant, toolResult }
+
 class ChatMessage {
   const ChatMessage({
     required this.id,
-    required this.isUser,
+    required this.role,
     required this.time,
     this.attachments = const <Attachment>[],
     this.tools = const <ToolCall>[],
@@ -50,7 +56,9 @@ class ChatMessage {
   });
 
   final String id;
-  final bool isUser;
+  final ChatRole role;
+
+  bool get isUser => role == ChatRole.user;
 
   /// 展示用时间文本，例如 `14:32`。
   final String time;
@@ -78,7 +86,7 @@ class ChatMessage {
   }) {
     return ChatMessage(
       id: id,
-      isUser: isUser,
+      role: role,
       time: time,
       attachments: attachments,
       tools: tools ?? this.tools,

@@ -1,4 +1,4 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 
 /// 工作区根目录默认值。真实路径在首次用到时由 `wep_storage` 解析成绝对路径。
 const String kDefaultWorkspaceRoot = r'~/WePChat/workspaces';
@@ -42,6 +42,72 @@ class ToolPermissionSpec {
   final IconData icon;
   final ToolPermission defaultPermission;
 }
+
+/// 权限档位的权威定义，默认值对齐功能协议 §9 的建议表。
+///
+/// 一个档位管一组工具（`Tool.permissionId` 指向这里的 id）：用户想的是
+/// "能不能改我的文件"，不是"write_file 能不能、edit_file 能不能"。
+///
+/// `AppSettings` 读它作首启默认值，`PermissionGate` 读它取显示名，设置页
+/// 读它渲染行。三处共用一份，加一个工具只改这里。
+const List<ToolPermissionSpec> kToolPermissionSpecs = <ToolPermissionSpec>[
+  ToolPermissionSpec(
+    id: 'read_file',
+    name: '读取工作区',
+    desc: 'list_files · search_files · read_file',
+    icon: Icons.folder_open_outlined,
+    defaultPermission: ToolPermission.allowed,
+  ),
+  ToolPermissionSpec(
+    id: 'write_file',
+    name: '写入文件',
+    desc: 'write_file · edit_file',
+    icon: Icons.edit_note_outlined,
+    defaultPermission: ToolPermission.ask,
+  ),
+  ToolPermissionSpec(
+    id: 'delete_file',
+    name: '删除文件',
+    desc: 'delete_file，删除后不可恢复',
+    icon: Icons.delete_outline,
+    defaultPermission: ToolPermission.ask,
+  ),
+  ToolPermissionSpec(
+    id: 'web_search',
+    name: '联网搜索',
+    desc: 'web_search，返回候选来源列表',
+    icon: Icons.public,
+    defaultPermission: ToolPermission.allowed,
+  ),
+  ToolPermissionSpec(
+    id: 'web_fetch',
+    name: '网页读取',
+    desc: 'web_fetch，只读单个来源正文',
+    icon: Icons.article_outlined,
+    defaultPermission: ToolPermission.allowed,
+  ),
+  ToolPermissionSpec(
+    id: 'run_js',
+    name: '运行 JavaScript',
+    desc: 'run_js，受限沙盒，无网络与进程权限',
+    icon: Icons.terminal,
+    defaultPermission: ToolPermission.ask,
+  ),
+  ToolPermissionSpec(
+    id: 'gen_image',
+    name: '图片生成',
+    desc: 'gen_image，结果写入当前工作区',
+    icon: Icons.image_outlined,
+    defaultPermission: ToolPermission.allowed,
+  ),
+  ToolPermissionSpec(
+    id: 'edit_image',
+    name: '图片编辑',
+    desc: 'edit_image，默认生成新文件',
+    icon: Icons.auto_fix_high_outlined,
+    defaultPermission: ToolPermission.allowed,
+  ),
+];
 
 /// 模型供应商配置卡片的展示模型。
 class ProviderInfo {

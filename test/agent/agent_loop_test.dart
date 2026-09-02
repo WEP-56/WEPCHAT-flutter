@@ -7,6 +7,7 @@ import 'package:wepchat/ai/model_catalog.dart';
 import 'package:wepchat/ai/provider_api.dart';
 import 'package:wepchat/ai/stream_event.dart';
 import 'package:wepchat/core/cancellation_token.dart';
+import 'package:wepchat/platform/workspace_guard.dart';
 import 'package:wepchat/tools/echo_tool.dart';
 import 'package:wepchat/tools/tool.dart';
 import 'package:wepchat/tools/tool_registry.dart';
@@ -104,7 +105,7 @@ void main() {
   AgentConfig configWith({int maxIterations = 20}) => AgentConfig(
         model: model,
         sessionId: 'session-1',
-        workspaceRoot: '/tmp/ws',
+        workspace: WorkspaceGuard('/tmp/ws'),
         maxIterations: maxIterations,
       );
 

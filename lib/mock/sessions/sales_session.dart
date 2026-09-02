@@ -40,7 +40,7 @@ const ChatSession kSalesSession = ChatSession(
   messages: <ChatMessage>[
     ChatMessage(
       id: 's1-m1',
-      isUser: true,
+      role: ChatRole.user,
       time: '14:28',
       attachments: <Attachment>[
         Attachment(name: 'sales_q2.csv', size: '48 KB', kind: FileKind.csv),
@@ -51,7 +51,7 @@ const ChatSession kSalesSession = ChatSession(
     ),
     ChatMessage(
       id: 's1-m2',
-      isUser: false,
+      role: ChatRole.assistant,
       time: '14:31',
       tools: <ToolCall>[
         ToolCall(
@@ -103,13 +103,13 @@ await wep.fs.writeText("sales_summary_q2.csv", toCsv(byRegion));
     ),
     ChatMessage(
       id: 's1-m3',
-      isUser: true,
+      role: ChatRole.user,
       time: '14:32',
       blocks: <ContentBlock>[ParagraphBlock('把结论单独写成 report_q2.md，标题用一级标题。')],
     ),
     ChatMessage(
       id: 's1-m4',
-      isUser: false,
+      role: ChatRole.assistant,
       time: '14:32',
       tools: <ToolCall>[
         ToolCall(

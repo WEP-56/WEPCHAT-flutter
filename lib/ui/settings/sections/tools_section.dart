@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../../mock/mock_settings.dart';
 import '../../../models/settings.dart';
 import '../../../state/app_scope.dart';
 import '../../../state/app_settings.dart';

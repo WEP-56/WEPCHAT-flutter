@@ -38,64 +38,10 @@ const List<ProviderInfo> kProviders = <ProviderInfo>[
 ];
 
 /// 权限档位默认值对齐功能协议 §9 的建议表。
-const List<ToolPermissionSpec> kToolPermissionSpecs = <ToolPermissionSpec>[
-  ToolPermissionSpec(
-    id: 'read_file',
-    name: '读取工作区',
-    desc: 'list_files · search_files · read_file',
-    icon: Icons.folder_open_outlined,
-    defaultPermission: ToolPermission.allowed,
-  ),
-  ToolPermissionSpec(
-    id: 'write_file',
-    name: '写入文件',
-    desc: 'write_file · edit_file',
-    icon: Icons.edit_note_outlined,
-    defaultPermission: ToolPermission.ask,
-  ),
-  ToolPermissionSpec(
-    id: 'delete_file',
-    name: '删除文件',
-    desc: 'delete_file，删除后不可恢复',
-    icon: Icons.delete_outline,
-    defaultPermission: ToolPermission.ask,
-  ),
-  ToolPermissionSpec(
-    id: 'web_search',
-    name: '联网搜索',
-    desc: 'web_search，返回候选来源列表',
-    icon: Icons.public,
-    defaultPermission: ToolPermission.allowed,
-  ),
-  ToolPermissionSpec(
-    id: 'web_fetch',
-    name: '网页读取',
-    desc: 'web_fetch，只读单个来源正文',
-    icon: Icons.article_outlined,
-    defaultPermission: ToolPermission.allowed,
-  ),
-  ToolPermissionSpec(
-    id: 'run_js',
-    name: '运行 JavaScript',
-    desc: 'run_js，受限沙盒，无网络与进程权限',
-    icon: Icons.terminal,
-    defaultPermission: ToolPermission.ask,
-  ),
-  ToolPermissionSpec(
-    id: 'gen_image',
-    name: '图片生成',
-    desc: 'gen_image，结果写入当前工作区',
-    icon: Icons.image_outlined,
-    defaultPermission: ToolPermission.allowed,
-  ),
-  ToolPermissionSpec(
-    id: 'edit_image',
-    name: '图片编辑',
-    desc: 'edit_image，默认生成新文件',
-    icon: Icons.auto_fix_high_outlined,
-    defaultPermission: ToolPermission.allowed,
-  ),
-];
+///
+/// 已移到 `lib/models/settings.dart`：它不是原型假数据，而是真实设置的
+/// 权威定义（`AppSettings` 读它作默认值，权限门读它取显示名），放在
+/// `mock/` 下会逼着 `tools/` 反向依赖原型层。
 
 const List<SearchBackendSpec> kSearchBackends = <SearchBackendSpec>[
   SearchBackendSpec(

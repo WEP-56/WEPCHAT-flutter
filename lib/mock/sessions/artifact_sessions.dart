@@ -28,7 +28,7 @@ const ChatSession kChecklistSession = ChatSession(
   messages: <ChatMessage>[
     ChatMessage(
       id: 's4-m1',
-      isUser: true,
+      role: ChatRole.user,
       time: '20:05',
       blocks: <ContentBlock>[
         ParagraphBlock('做一个露营装备清单的单页，能勾选，风格清爽一点，样式单独放一个文件。'),
@@ -36,7 +36,7 @@ const ChatSession kChecklistSession = ChatSession(
     ),
     ChatMessage(
       id: 's4-m2',
-      isUser: false,
+      role: ChatRole.assistant,
       time: '20:12',
       tools: <ToolCall>[
         ToolCall(
@@ -94,7 +94,7 @@ const ChatSession kManualSession = ChatSession(
   messages: <ChatMessage>[
     ChatMessage(
       id: 's5-m1',
-      isUser: true,
+      role: ChatRole.user,
       time: '16:31',
       attachments: <Attachment>[
         Attachment(
@@ -107,7 +107,7 @@ const ChatSession kManualSession = ChatSession(
     ),
     ChatMessage(
       id: 's5-m2',
-      isUser: false,
+      role: ChatRole.assistant,
       time: '16:40',
       tools: <ToolCall>[
         ToolCall(

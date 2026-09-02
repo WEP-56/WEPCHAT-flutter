@@ -158,6 +158,14 @@ void main() {
 
       expect(blocks.single, isA<ParagraphBlock>());
     });
+
+    test('流式生成时单个竖线不炸（RangeError 修复）', () {
+      // 修复前：trimmed.substring(1, trimmed.length - 1) 在 length=1 时炸。
+      expect(parseMarkdownBlocks('|'), isA<List<ContentBlock>>());
+      expect(parseMarkdownBlocks('|\n一段话'), isA<List<ContentBlock>>());
+      // 表格打到一半也不该炸。
+      expect(parseMarkdownBlocks('| 列 |\n|'), isA<List<ContentBlock>>());
+    });
   });
 
   test('混合文档：各块按出现顺序排好', () {

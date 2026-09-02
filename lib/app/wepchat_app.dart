@@ -14,9 +14,13 @@ import 'app_nav.dart';
 
 /// 应用根组件：持有全局状态对象，构建主题与外壳。
 class WepChatApp extends StatefulWidget {
-  const WepChatApp({required this.bootstrap, super.key});
+  const WepChatApp({required this.bootstrap, this.navigatorKey, super.key});
 
   final AppBootstrap bootstrap;
+
+  /// 由 `main()` 传进来，和权限弹窗共用同一个 Navigator。
+  /// 测试不传，自己建一个。
+  final GlobalKey<NavigatorState>? navigatorKey;
 
   @override
   State<WepChatApp> createState() => _WepChatAppState();
@@ -29,7 +33,8 @@ class _WepChatAppState extends State<WepChatApp> {
   SessionStore get _sessions => widget.bootstrap.sessions;
 
   final DesktopShellController _desktopShell = DesktopShellController();
-  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+  late final GlobalKey<NavigatorState> _navigatorKey =
+      widget.navigatorKey ?? GlobalKey<NavigatorState>();
 
   @override
   void dispose() {

@@ -6,6 +6,7 @@ import '../ai/model_catalog.dart';
 import '../ai/provider_api.dart';
 import '../ai/stream_event.dart';
 import '../core/cancellation_token.dart';
+import '../platform/workspace_guard.dart';
 import '../tools/tool.dart';
 import '../tools/tool_registry.dart';
 import 'agent_event.dart';
@@ -15,7 +16,7 @@ class AgentConfig {
   const AgentConfig({
     required this.model,
     required this.sessionId,
-    required this.workspaceRoot,
+    required this.workspace,
     this.systemPrompt,
     this.maxIterations = 20,
     this.maxOutputTokens,
@@ -25,7 +26,10 @@ class AgentConfig {
 
   final ModelSpec model;
   final String sessionId;
-  final String workspaceRoot;
+
+  /// 这个会话工作区的路径守卫，直接进 [ToolContext]。
+  final WorkspaceGuard workspace;
+
   final String? systemPrompt;
 
   /// 迭代上限（§5-8）。到了就停，不再发请求。
@@ -158,11 +162,16 @@ class AgentLoop {
           call.arguments,
           ToolContext(
             sessionId: _config.sessionId,
-            workspaceRoot: _config.workspaceRoot,
+            workspace: _config.workspace,
             token: token,
           ),
         );
 
+        // 落盘时机：**工具结果每个执行完立刻落盘**（存储设计 §6.1、§9-8）。
+        // 不等整轮结束，因为副作用已经发生了——文件真的被写了。中途崩溃
+        // 重启后如果磁盘变了而上下文里没有对应的结果，模型会基于错误前提
+        // 继续决策。这个事件就是给上层的落盘信号，所以它必须在 `results`
+        // 添加之前 yield：上层落完盘，这一条才算数。
         yield AgentToolEnd(call: call, result: result);
 
         // 每个 tool_use 都必须配一个 tool_result，中断也不例外——

@@ -3,7 +3,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:wepchat/ai/provider_api.dart';
 import 'package:wepchat/core/cancellation_token.dart';
 import 'package:wepchat/core/errors.dart';
+import 'package:wepchat/models/settings.dart';
+import 'package:wepchat/platform/workspace_guard.dart';
+import 'package:wepchat/state/app_settings.dart';
 import 'package:wepchat/tools/echo_tool.dart';
+import 'package:wepchat/tools/permission_gate.dart';
 import 'package:wepchat/tools/tool.dart';
 import 'package:wepchat/tools/tool_registry.dart';
 
@@ -17,6 +21,10 @@ class _ThrowingTool extends Tool {
         description: '总是抛异常',
         schema: <String, Object?>{'type': 'object'},
       );
+
+  // 借用「读取工作区」这个默认放行的档位，让它能真的跑到抛异常那一步。
+  @override
+  String get permissionId => 'read_file';
 
   @override
   Future<ToolResult> execute(
@@ -48,7 +56,7 @@ class _CancellingTool extends Tool {
   }
 }
 
-/// 写类工具，验证 requiresApproval 由工具自己声明。
+/// 写类工具，验证 permissionId 由工具自己声明。
 class _WritingTool extends Tool {
   const _WritingTool();
 
@@ -60,7 +68,7 @@ class _WritingTool extends Tool {
       );
 
   @override
-  bool get requiresApproval => true;
+  String get permissionId => 'write_file';
 
   @override
   Future<ToolResult> execute(
@@ -73,7 +81,7 @@ class _WritingTool extends Tool {
 void main() {
   ToolContext contextWith(CancellationToken token) => ToolContext(
         sessionId: 'session-1',
-        workspaceRoot: '/tmp/ws',
+        workspace: WorkspaceGuard('/tmp/ws'),
         token: token,
       );
 
@@ -132,9 +140,9 @@ void main() {
       expect(registry.find('nope'), isNull);
     });
 
-    test('requiresApproval 默认 false，写类工具自己声明 true', () {
-      expect(const EchoTool().requiresApproval, isFalse);
-      expect(const _WritingTool().requiresApproval, isTrue);
+    test('permissionId 默认取工具名，写类工具指向共用的档位', () {
+      expect(const EchoTool().permissionId, equals('echo'));
+      expect(const _WritingTool().permissionId, equals('write_file'));
     });
   });
 
@@ -230,6 +238,101 @@ void main() {
 
       expect(result.isError, isTrue);
       expect(result.content, contains('中断'));
+    });
+  });
+
+  group('dispatch 过权限门', () {
+    // 门放在 dispatch 里而不是调用方，是为了让"忘了检查"不可能发生
+    // （协议 §9 要求检查在执行前）。这一组守的就是这条。
+    late AppSettings settings;
+
+    setUp(() => settings = AppSettings.memory());
+    tearDown(() => settings.dispose());
+
+    test('被拒时工具根本不执行，结果是 denied', () async {
+      settings.setPermission('write_file', ToolPermission.denied);
+      final ToolRegistry registry = ToolRegistry(
+        const <Tool>[_WritingTool()],
+        gate: PermissionGate(settings: settings),
+      );
+
+      final ToolResult result = await registry.dispatch(
+        'write',
+        <String, Object?>{},
+        liveContext,
+      );
+
+      expect(result.outcome, ToolOutcome.denied);
+      expect(result.content, isNot(contains('written')));
+    });
+
+    test('允许时照常执行', () async {
+      settings.setPermission('write_file', ToolPermission.allowed);
+      final ToolRegistry registry = ToolRegistry(
+        const <Tool>[_WritingTool()],
+        gate: PermissionGate(settings: settings),
+      );
+
+      final ToolResult result = await registry.dispatch(
+        'write',
+        <String, Object?>{},
+        liveContext,
+      );
+
+      expect(result.outcome, ToolOutcome.ok);
+      expect(result.content, equals('written'));
+    });
+
+    test('拒绝与失败是两种结果，不合并成一个 bool', () async {
+      settings.setPermission('write_file', ToolPermission.denied);
+      final ToolRegistry registry = ToolRegistry(
+        const <Tool>[_WritingTool(), _ThrowingTool()],
+        gate: PermissionGate(settings: settings),
+      );
+
+      final ToolResult denied = await registry.dispatch(
+        'write',
+        <String, Object?>{},
+        liveContext,
+      );
+      final ToolResult failed = await registry.dispatch(
+        'boom',
+        <String, Object?>{},
+        liveContext,
+      );
+
+      // 两者的 isError 都是 true，但界面要区分"你自己拒的"和"它坏了"。
+      expect(denied.isError, isTrue);
+      expect(failed.isError, isTrue);
+      expect(denied.outcome, ToolOutcome.denied);
+      expect(failed.outcome, ToolOutcome.failed);
+    });
+
+    test('M2 工具全集里没有重名，且都声明了权限档位', () {
+      final ToolRegistry registry = ToolRegistry(kWorkspaceTools);
+      expect(
+        registry.declarations.map((ToolDefinition d) => d.name).toList(),
+        equals(<String>[
+          'delete_file',
+          'edit_file',
+          'list_files',
+          'read_file',
+          'search_files',
+          'write_file',
+        ]),
+      );
+
+      final Set<String> declared = <String>{
+        for (final ToolPermissionSpec s in kToolPermissionSpecs) s.id,
+      };
+      for (final Tool t in kWorkspaceTools) {
+        expect(
+          declared,
+          contains(t.permissionId),
+          reason: '${t.name} 的 permissionId 没在 kToolPermissionSpecs 里，'
+              '权限门会退到「询问」',
+        );
+      }
     });
   });
 }

@@ -28,7 +28,7 @@ const ChatSession kResearchSession = ChatSession(
   messages: <ChatMessage>[
     ChatMessage(
       id: 's2-m1',
-      isUser: true,
+      role: ChatRole.user,
       time: '10:58',
       blocks: <ContentBlock>[
         ParagraphBlock('帮我调研适合本地优先应用的向量数据库，重点看能不能嵌入式部署，不要后台服务。'),
@@ -36,7 +36,7 @@ const ChatSession kResearchSession = ChatSession(
     ),
     ChatMessage(
       id: 's2-m2',
-      isUser: false,
+      role: ChatRole.assistant,
       time: '11:05',
       tools: <ToolCall>[
         ToolCall(

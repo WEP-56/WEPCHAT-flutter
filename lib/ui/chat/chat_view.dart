@@ -11,6 +11,7 @@ import '../widgets/toast.dart';
 import 'chat_header.dart';
 import 'composer.dart';
 import 'message_item.dart';
+import 'usage_bar.dart';
 
 /// 中间聊天栏：顶栏 + 消息流 + 输入区。
 class ChatView extends StatefulWidget {
@@ -131,6 +132,11 @@ class _ChatViewState extends State<ChatView> {
                     ? const _EmptyState()
                     : _buildList(context, session),
               ),
+              if (store.activeWasInterrupted)
+                _InterruptedBanner(
+                  onDismiss: () => store.clearInterrupted(session.id),
+                ),
+              UsageBar(usage: store.lastUsage),
               Composer(
                 isGenerating: store.isGenerating,
                 onSend: store.sendMessage,
@@ -178,6 +184,51 @@ class _ChatViewState extends State<ChatView> {
           ),
         );
       },
+    );
+  }
+}
+
+/// 「上次回复被中断」提示条（实施 TODO §10-6，存储设计 §6.2）。
+///
+/// 只提示不自动重发（§13.5 已定）：用户可能就是故意杀掉的，替他重发一次
+/// 要花钱。重发就是再打一遍——不给按钮，因为上次那条用户消息还在历史里，
+/// 用户自己看得见。
+class _InterruptedBanner extends StatelessWidget {
+  const _InterruptedBanner({required this.onDismiss});
+
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppPalette palette = context.palette;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 6),
+      padding: const EdgeInsets.fromLTRB(10, 8, 6, 8),
+      decoration: BoxDecoration(
+        color: palette.bgRaise,
+        border: Border.all(color: palette.border),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: <Widget>[
+          Icon(Icons.history_toggle_off, size: 15, color: palette.text3),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '上次的回复没有正常结束，可以再发一次消息继续。',
+              style: TextStyle(fontSize: 11.5, color: palette.text2),
+            ),
+          ),
+          IconButton(
+            onPressed: onDismiss,
+            icon: const Icon(Icons.close, size: 15),
+            color: palette.text3,
+            visualDensity: VisualDensity.compact,
+            tooltip: '知道了',
+          ),
+        ],
+      ),
     );
   }
 }

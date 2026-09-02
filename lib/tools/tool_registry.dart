@@ -1,10 +1,27 @@
-/// 工具注册表（实施 TODO §7-2、§7-3）。
+/// 工具注册表（实施 TODO §7-2、§7-3、§7-10）。
 library;
 
 import '../ai/provider_api.dart';
 import '../core/cancellation_token.dart';
 import '../core/errors.dart';
+import 'permission_gate.dart';
 import 'tool.dart';
+import 'workspace/delete_file_tool.dart';
+import 'workspace/edit_file_tool.dart';
+import 'workspace/list_files_tool.dart';
+import 'workspace/read_file_tool.dart';
+import 'workspace/search_files_tool.dart';
+import 'workspace/write_file_tool.dart';
+
+/// M2 的工作区文件工具全集（§7-14）。
+const List<Tool> kWorkspaceTools = <Tool>[
+  DeleteFileTool(),
+  EditFileTool(),
+  ListFilesTool(),
+  ReadFileTool(),
+  SearchFilesTool(),
+  WriteFileTool(),
+];
 
 /// 工具的查找与声明排序。
 ///
@@ -12,8 +29,9 @@ import 'tool.dart';
 /// 这个分工）。理由是缓存前缀依赖字节稳定：两处各排一次，哪天其中一处的
 /// 比较函数变了，缓存会静默失效而不报错——静默失效只能靠对账单发现。
 class ToolRegistry {
-  ToolRegistry(Iterable<Tool> tools)
-      : _byName = <String, Tool>{
+  ToolRegistry(Iterable<Tool> tools, {PermissionGate? gate})
+      : _gate = gate,
+        _byName = <String, Tool>{
           for (final Tool t in tools) t.name: t,
         } {
     if (_byName.length != tools.length) {
@@ -31,6 +49,13 @@ class ToolRegistry {
 
   final Map<String, Tool> _byName;
 
+  /// 执行前的权限裁决（§7-10）。
+  ///
+  /// 为 null 时不做权限检查——只有测试和 `empty` 是这种情况。生产链路由
+  /// `SessionStore` 建表时一定传：把门放在 dispatch 里而不是调用方，
+  /// 是为了让"忘了检查"这件事不可能发生（协议 §9 要求检查在执行前）。
+  final PermissionGate? _gate;
+
   /// 按名字典序排好的声明，直接传给 [ProviderRequest.tools]（§6-6）。
   List<ToolDefinition> get declarations {
     final List<Tool> sorted = _byName.values.toList()
@@ -42,7 +67,7 @@ class ToolRegistry {
 
   Tool? find(String name) => _byName[name];
 
-  /// 执行一次工具调用。
+  /// 执行一次工具调用：查工具 → 过权限门 → 执行。
   ///
   /// 模型给的工具名可能不存在（拼错、或是换模型后旧历史里的工具已经下线）。
   /// 这种情况返回 [ToolResult.error] 而不是抛：模型看到"没有这个工具，可用
@@ -60,8 +85,18 @@ class ToolRegistry {
       );
     }
 
-    if (context.token.isCancelled) {
-      return ToolResult.error('执行被用户中断');
+    if (context.token.isCancelled) return ToolResult.cancelled();
+
+    final PermissionGate? gate = _gate;
+    if (gate != null) {
+      final PermissionVerdict verdict = await gate.authorize(
+        tool: tool,
+        sessionId: context.sessionId,
+        arguments: arguments,
+      );
+      if (!verdict.allowed) return ToolResult.denied(verdict.reason);
+      // 弹窗期间用户可能按了停止。副作用还没发生，这时退出是干净的。
+      if (context.token.isCancelled) return ToolResult.cancelled();
     }
 
     try {
@@ -69,7 +104,7 @@ class ToolRegistry {
     } on CancelledException {
       // 中断不是工具的错，但也要作为结果回传：这一轮的 tool_use 必须配一个
       // tool_result，缺了下次请求会被 API 拒（§5-6）。
-      return ToolResult.error('执行被用户中断');
+      return ToolResult.cancelled();
     } on Object catch (e) {
       // 工具实现里漏掉的异常不能杀掉整个 loop——那会让用户看到一条没有
       // 结果的工具调用，且无法继续对话。

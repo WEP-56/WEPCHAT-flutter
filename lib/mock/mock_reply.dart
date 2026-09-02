@@ -9,7 +9,7 @@ import '../models/tool_call.dart';
 /// 接入 Agent Core 后整个文件会被删除。
 abstract final class MockReply {
   static ChatMessage placeholder({required String id, required String time}) {
-    return ChatMessage(id: id, isUser: false, time: time, isStreaming: true);
+    return ChatMessage(id: id, role: ChatRole.assistant, time: time, isStreaming: true);
   }
 
   static ChatMessage complete({
@@ -20,7 +20,7 @@ abstract final class MockReply {
     final _ReplyShape shape = _shapeFor(userText);
     return ChatMessage(
       id: id,
-      isUser: false,
+      role: ChatRole.assistant,
       time: time,
       tools: shape.tools,
       blocks: shape.blocks,
