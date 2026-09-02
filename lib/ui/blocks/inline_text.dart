@@ -5,8 +5,9 @@ import '../../theme/palette.dart';
 
 /// 行内轻量 Markdown：`**粗体**`、`` `行内代码` ``、`[1]` 引用角标。
 ///
-/// 只支持这三种：模型输出的正文块由 Agent 侧结构化，不需要在客户端做完整
-/// Markdown 解析。
+/// 只管**行内**：块级结构（标题、围栏代码、列表、表格）在进渲染层之前就已经
+/// 被 `parseMarkdownBlocks` 拆成了 [ContentBlock]，到这里的每段文本都是一个
+/// 块的内容，不会再有 ``` 或行首的 `#`。
 class InlineText extends StatelessWidget {
   const InlineText(
     this.text, {

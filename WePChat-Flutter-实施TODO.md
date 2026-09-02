@@ -73,10 +73,12 @@ lib/
 | M2 | `file_picker` 或平台通道 | 附件选择 | Android 13+ 权限模型 |
 | M5 | QuickJS 静态库（自建 FFI，非 pub 包） | `run_js` | 四个 ABI 交叉编译 + Windows MSVC 构建 + `dart:ffi` 绑定 |
 
+设置持久化用 `dart:io` + `dart:convert` 写 JSON，不引包（§13.4）。
+
 不引入：drift、freezed、json_serializable、riverpod / bloc、任何 SSE 封装包。理由统一是"生成代码或第三方类型渗透领域层"，以及现有量级不需要。
 
-- [ ] 2-1 逐个包在 Android 真机与 Windows Release 上确认可构建后再进 `pubspec.yaml`，不批量加。
-- [ ] 2-2 `sqlite3_flutter_libs` 加入后立刻验证：Android arm64/armv7/x86_64 + Windows Release 打包能找到 native 库。
+- [x] 2-1 纯 Dart 包（`http`、`crypto`、`path`）直接加，无平台产物就没有平台风险。带 native 产物的（`sqlite3_flutter_libs`）才需要先验证。
+- [ ] 2-2 `sqlite3_flutter_libs` 的验证：Android arm64/armv7/x86_64 + Windows Release 打包能找到 native 库。**M0 加进来时没验，现在还欠着**——见 §12-4、§12-5。
 
 ## 3. `core/`：取消与错误（最先做，别的都依赖它）
 
@@ -146,27 +148,27 @@ agent_start
 agent_end
 ```
 
-- [ ] 5-1 外层与内层分成两个方法，不要写成一个带三重 `while` 的函数。
-- [ ] 5-2 单次运行守卫：同一会话同时只允许一个 run（一个 `activeRun` 字段 + abort token）。第二次 prompt 进队列而不是并发跑。
-- [ ] 5-3 队列模式：`all`（一次全灌进去）/ `oneAtATime`（每轮取一条）。默认 `oneAtATime`，与 pi 默认一致。
-- [ ] 5-4 用户在生成中途输入的消息走 steering 路径（插到本轮工具结果之后），不打断当前流。
+- [x] 5-1 一层循环就够（`AgentLoop.run`）：发请求 → 收流 → 有 tool_use 就执行、结果进历史、回到第一步。pi 的外层 follow-up 循环是为它的队列/steering 服务的，那两个特性我们不做（见下）。
+- [x] 5-2 单次运行守卫：同一会话同时只允许一个 run。界面在生成中禁用发送按钮（`Composer` 已经这么做了），`SessionStore` 再兜一层。
+- [ ] 5-3 ~~队列模式 `all` / `oneAtATime`~~ **不做**。日常聊天里"连发两条"的正确行为是按钮禁用，不是排队——排队要额外维护待发列表、要处理"排队中用户又改主意"，而用户实际期望只是"等它说完"。
+- [ ] 5-4 ~~生成中途输入走 steering 路径~~ **不做**。同上：中途插话在编码 agent 里有价值（长任务跑偏要纠正），在聊天里没有。真需要了用户会点停止再重发。
 
 ### 5.2 事件（补齐协议 §10.3）
 
 协议列了 `agent_start` / `turn_start` / `message_update` / `tool_execution_start` / `tool_execution_update` / `tool_execution_end` / `turn_end` / `agent_end`。界面需要区分"新气泡出现"和"气泡内容变了"，所以：
 
-- [ ] 5-5 把 `message_update` 拆成 `message_start` / `message_update` / `message_end`。这是偏离 B，需用户确认后回写协议 §10.3。
-- [ ] 5-6 事件流是界面的**唯一**输入。界面不去读 storage、不自己算状态（`AGENTS.md` §1.2）。
-- [ ] 5-7 一个纯函数式归约器把事件序列变成 `SessionRuntimeState { messages, streamingMessage, pendingToolCalls, lastError }`，参考 pi `agent.ts` 的 `processEvents`。纯函数便于测试。
-- [ ] 5-8 订阅者按序 await，异常不吞：某个订阅者抛异常要让 run 失败并上报，不能静默继续（`AGENTS.md` §1.3）。
+- [x] 5-5 把 `message_update` 拆成 `message_start` / `message_update` / `message_end`。这是偏离 B，代码已按此实现（`lib/agent/agent_event.dart`）。
+- [ ] 5-6 界面的会话内容来自 `SessionStore`（它自己是落库方，内存状态与库一致）；agent 事件只驱动"生成中"的那条消息。原文写的"事件流是界面唯一输入"在这里做不到也不必做——历史消息是重启后从库里读的，不可能来自事件流。
+- [ ] 5-7 ~~纯函数式归约器 + `SessionRuntimeState`~~ **不做**。`SessionStore` 已经是 `ChangeNotifier`，再加一层归约器等于同一份状态存两处。事件在 `SessionStore` 里直接 switch 处理，那个 switch 本身就是归约。
+- [x] 5-8 单一订阅者（`SessionStore`），不做多订阅者分发。异常不吞：`AgentLoop.run` 不抛，失败编码进 `AgentDone`。
 
 ### 5.3 内层循环的几条硬规则（都来自 pi，都有明确理由）
 
 - [ ] 5-9 `stopReason == "length"` 时**整批工具调用全部不执行**，本轮以错误结束。因为最后一个 tool call 的 arguments 被截断了，JSON 不完整，猜参数等于乱执行。
-- [ ] 5-10 有任一工具声明 `sequential` 就整批串行；全是 `readonly` 才并行。协议 §6.2 的"写/编辑/删除必须串行"由此落地。
-- [ ] 5-11 `terminate` 只在**所有**工具结果都要求终止时才终止。一个工具说停另一个说继续 ⇒ 继续。
-- [ ] 5-12 工具执行前必过权限门（§7.3），拒绝也要**产生一条 tool result** 告诉模型"用户拒绝了"，不能静默跳过——否则模型看到工具调用没有结果，会重试到死。
-- [ ] 5-13 钩子（`beforeToolCall` / `afterToolCall` / `shouldStopAfterTurn`）**不得抛异常**，签名上写清，实现里包一层。
+- [x] 5-10 **全部串行执行**（`AgentLoop` 现在就是顺序 await）。协议 §6.2 只要求写操作串行，但全串行同样满足，而且省掉"哪些能并行"的判断；日常聊天一轮撑死三五个工具调用，并行省下的时间用户感知不到。真遇到慢工具再开并行。
+- [ ] 5-11 ~~`terminate` 多工具投票~~ **不做**：我们没有能要求终止对话的工具。
+- [ ] 5-12 工具执行前必过权限门（§7.3），拒绝也要**产生一条 tool result** 告诉模型"用户拒绝了"，不能静默跳过——否则模型看到工具调用没有结果，会重试到死。M2 做。
+- [ ] 5-13 ~~钩子体系（`beforeToolCall` / `afterToolCall` / `shouldStopAfterTurn`）~~ **不做**：没有第二个调用方需要插入行为，权限门直接写在 loop 里就行。
 
 ## 6. 上下文拼接与缓存命中
 
@@ -195,10 +197,10 @@ agent_end
 
 Dart 的 `Map` 是插入序，`jsonEncode` 按插入序输出——这意味着**构造 Map 的代码顺序决定了字节**。重构时挪一行赋值就会打断所有用户的缓存，而且没人会发现。
 
-- [ ] 6-5 请求体不用临时 `Map` 字面量拼，用一个显式的 builder，字段顺序写死并加注释"顺序影响 prompt cache，勿动"。
-- [ ] 6-6 工具定义按 `name` 字典序输出，不依赖注册顺序。
-- [ ] 6-7 JSON Schema 里的 `properties` 按声明顺序、`required` 数组排序后输出。
-- [ ] 6-8 写一个测试：同一 session 状态序列化两次，字节完全相等；改动无关代码后仍与黄金样本相等。这是唯一能防住回归的手段。
+- [x] 6-5 请求体不用临时 `Map` 字面量拼，用一个显式的 builder，字段顺序写死并加注释"顺序影响 prompt cache，勿动"。
+- [x] 6-6 工具定义按 `name` 字典序输出，不依赖注册顺序。
+- [ ] 6-7 JSON Schema 里的 `properties` 按声明顺序、`required` 数组排序后输出。**M2 有工具了再说**——现在工具表是空的，没有 schema 可排。
+- [ ] 6-8 每个适配器一条 golden 测试：同一请求序列化两次字节相等。**只做这一条**，不做"改动无关代码后仍与黄金样本相等"的全量比对：后者要维护一份会随每次正常改动一起变的样本文件，改动它的成本比它挡住的 bug 更高。
 
 ### 6.3 两家的缓存开关
 
@@ -211,9 +213,9 @@ Dart 的 `Map` 是插入序，`jsonEncode` 按插入序输出——这意味着*
 
 跨模型兼容要做一批消息改写（对应 pi 的 `transformMessages`）：非视觉模型降级图片、换模型后丢弃他人的 thinking 块、tool_call id 规范化、丢弃 `stopReason` 为 error/aborted 的 assistant 轮次、给孤立的 tool_use 补一条 `"No result provided"` 结果。
 
-- [ ] 6-13 这个函数必须是**纯函数且幂等**：`f(f(x)) == f(x)`。否则同一段历史两次序列化字节不同，缓存直接失效。写测试卡住。
-- [ ] 6-14 丢弃出错轮次靠 `entries.stop_reason` 列判断，不解析 payload（存储文档 §5.2）。
-- [ ] 6-15 换模型时的 thinking 块处理：只保留"同一模型产出"的 thinking。模型身份记在 entry payload 里，靠它判断。
+- [ ] 6-13 这个函数是纯函数，写一条幂等测试（`f(f(x)) == f(x)`）。**M3 做**——这一批改写只在换模型、图片降级、压缩这些场景才有输入，M1/M2 的历史里根本没有需要改写的东西，现在写等于测空函数。
+- [x] 6-14 丢弃出错轮次靠 `entries.stop_reason` 列判断，不解析 payload（存储文档 §5.2）。
+- [ ] 6-15 换模型时的 thinking 块处理：只保留"同一模型产出"的 thinking。模型身份记在 `ChatMessageModel.modelId` 与 entry payload 里，靠它判断。M3 随 6-13 一起做。
 
 ### 6.5 压缩与缓存的关系
 
@@ -242,8 +244,8 @@ abstract class WepTool {
 }
 ```
 
-- [ ] 7-1 `prepareArguments` 容错，`execute` 严格。模型经常把数组塞成 JSON 字符串、把嵌套字段拍平——这些在 `prepareArguments` 里修，`execute` 拿到的必须已经是规范形状。pi 的 edit 工具就同时接受 `edits` 为字符串和顶层的 `oldText`/`newText`。
-- [ ] 7-2 校验在**工具入口一次**完成（`AGENTS.md` §4）。写一个受限 JSON Schema 校验器：object / string / number / integer / boolean / array / enum / required / 描述。**不支持** `oneOf` / `anyOf` / `$ref` / 递归——协议 §6.2 本来就要求用各家都支持的子集，校验器只需覆盖这个子集。约 150 行，不引包。
+- [ ] 7-1 `prepareArguments` 容错，`execute` 严格。模型经常把数组塞成 JSON 字符串、把嵌套字段拍平——这些在 `prepareArguments` 里修。**等真见到模型传错再加对应的修法**，不预先按 pi 的清单全铺一遍：每一条容错都是在掩盖一种输入，不知道哪种真的会来就不知道该掩盖哪种。
+- [ ] 7-2 校验在**工具入口一次**完成（`AGENTS.md` §4）。第一版**不写通用 schema 校验器**：M2 只有六个文件工具，每个的参数就两三个字段，手写检查比写一个 150 行的校验器再用它检查六个工具更短也更好读。工具数过十个、或出现共享的复杂参数形状时再抽。
 - [ ] 7-3 `ToolResult` 四态必须能区分（`AGENTS.md` §4）：成功、业务失败（文件不存在）、被取消、权限拒绝。四态在界面上的呈现不同，合并成一个 bool 会丢信息。
 - [ ] 7-4 `execute` 每个 IO 步骤之间检查 `token.isCancelled`。长循环里也要检查。
 - [ ] 7-5 结果里除了给模型的 `content`，还带 `details`（diff、patch、命中行号），供界面渲染。给模型的文本要短，界面要的细节走 `details`。
@@ -312,15 +314,19 @@ abstract class WepTool {
 | 里程碑 | 内容 | 完成标准 |
 |---|---|---|
 | **M0** | `core/` + `storage/` + DB isolate + 迁移 | 现有界面跑在真存储上，重启后会话仍在，界面代码零改动 |
-| **M1** | `ai/` 的 openai-completions + 设置里配 key | 无工具的纯聊天流式跑通，可中断，用量正确显示 |
-| **M2** | loop + 工具注册 + 权限门 + 工作区文件工具 | 能让模型读写工作区文件，权限三态生效，写操作串行 |
-| **M3** | anthropic-messages + openai-responses + 缓存策略 + 压缩 | 三种 API 都能跑；界面能看到 cacheRead > 0；长会话自动压缩不报错 |
-| **M4** | `web_search` / `web_fetch` + 搜索后端 | 至少两个后端可切换 |
+| **M1** | 三个适配器（completions / responses / messages）+ 设置页配 provider 与 key + loop 接线（空工具表） | 无工具的纯聊天流式跑通，可中断，用量能看到 |
+| **M2** | 工具注册 + 权限门 + 工作区文件工具 | 能让模型读写工作区文件，权限三态生效，写操作串行 |
+| **M3** | 缓存策略 + 压缩 | 界面能看到 cacheRead > 0；长会话自动压缩不报错 |
+| **M4** | `web_search` / `web_fetch` + 搜索后端 | 至少一个后端能用 |
 | **M5** | QuickJS + `run_js` | 死循环脚本能被真中断（不是超时放手） |
 | **M6** | 记忆 + `gen_image` / `edit_image` | 记忆三态开关生效；图片不覆盖 |
 | **P1** | 协议 §11 的 P1 项 | — |
 
-顺序理由：存储在最前面，因为它是唯一"错了要迁移数据"的部分——晚改代价最大。缓存策略排在 M3 而不是 M1，因为它需要三个适配器都在场才能验证抽象是否正确；但 §6.2 的确定性序列化从 M1 第一天就要守，那是习惯问题不是功能。
+顺序理由：存储在最前面，因为它是唯一"错了要迁移数据"的部分——晚改代价最大。
+
+三个适配器合并进 M1（原计划 completions 在 M1、另两个在 M3）：三家的请求体差异只有在三份都写出来之后才看得出抽象对不对，分两批写等于第二批必然要回头改第一批。反过来，缓存策略和压缩从 M1 挪到 M3，因为它们要真实账单才能验证，而账单只有在能聊天之后才有。
+
+**这是一个轻量日常聊天项目。** 功能跑通优先于形式完备：能用的实现胜过等着补齐的规范。下面带"M3 再说"、"先不做"标注的条目都是这条的落地——它们不是被否决，是被推后到有东西可验证的时候。
 
 ## 12. 每个里程碑的检查
 
@@ -331,25 +337,23 @@ abstract class WepTool {
 
 需要用户在真机 / 真环境跑的（代理不得声称已通过，只能标"未执行"）：
 
-- [ ] 12-3 `flutter test`（含 §6-8 的字节稳定性测试、§6-13 的幂等测试、归约器纯函数测试、schema 校验器测试）
-- [ ] 12-4 Android 真机：四个 ABI 装得上、SQLite native 库能加载、大文件读不卡 UI
+- [ ] 12-3 `flutter test`（含 §6-8 的字节稳定性测试）
+- [ ] 12-4 Android 真机：四个 ABI 装得上、SQLite native 库能加载
 - [ ] 12-5 Windows Release 打包：sqlite3.dll 打进产物
-- [ ] 12-6 真实 API 联通：三家各一个模型，看 `cacheRead` 是否 > 0（缓存策略唯一的验证手段）
-- [ ] 12-7 杀进程恢复：生成中途杀掉，重启后工具结果在、中断提示出现
-- [ ] 12-8 断网 / 401 / 429 / 超时四种失败路径的界面表现
+- [ ] 12-6 真实 API 联通：能聊天、用量显示正确。`cacheRead > 0` 的验证挪到 M3（缓存策略在那时才做）
+- [ ] 12-7 杀进程恢复：生成中途杀掉，重启后中断提示出现
+- [ ] 12-8 至少验 401 与断网两条失败路径的界面表现。429 / 超时靠代码走同一条错误通道（`http_transport.dart` 的 `_toError`），不单独构造
 
-## 13. 待定决策
+## 13. 决策记录
 
-需要用户拍的，按重要性排：
+已定（2026-09-01）：
 
-1. **偏离 A**：记忆从 `memory.json` 迁到 SQLite 表（存储文档 §12）。接受则同步改协议 §2.2。
-2. **偏离 B**：事件补 `message_start` / `message_end`（本文 §5-5）。接受则同步改协议 §10.3。
-3. **偏离 C**：五个模块做成目录分层而非 pub 包（本文 §0.3）。
-4. **API key 存哪**：平台安全存储（Android Keystore / Windows DPAPI，需要新依赖或自写平台通道）还是 DB 里明文。DB 明文的实际风险在 Android 上很低（应用私有目录，未 root 拿不到），Windows 上则等于明文可读。倾向"Windows 用 DPAPI，Android 用私有目录明文"，但这需要写平台通道，工作量不小。
-5. **不做自动恢复**只做中断提示（存储文档 §6.2）。
+1. **偏离 A**：记忆存 SQLite 表而非 `memory.json`（存储文档 §12）。M6 落地时同步改协议 §2.2。
+2. **偏离 B**：事件补 `message_start` / `message_end`。**已实现**，见 `lib/agent/agent_event.dart`。同步改协议 §10.3。
+3. **偏离 C**：五个模块做成目录分层而非 pub 包。**已实现**。
+4. **设置与 API key 存 JSON 文件明文**：`<appSupport>/settings.json`，和 DB 同一个私有目录。理由是这是个轻量项目：Android 私有目录未 root 拿不到；Windows 上明文可读，但要写 DPAPI 平台通道才能改善，工作量与收益不成比例。**界面永不显示明文 key**（只显示掩码），日志走 `redact()`。将来要加密只需换 `SettingsStore` 的读写两个方法。
+5. **不做自动恢复**，只做"上次被中断"提示（存储文档 §6.2）。
 6. **编辑重发用 truncate 标记**而非分支树（存储文档 §8）。
-7. **搜索后端**第一版做哪两个。Tavily 要 key，SearXNG 要公共实例（可用性不稳），Brave 有免费额度。
-8. **压缩触发**是自动还是询问。协议没说。自动更省心，但会在用户没预期时产生一次昂贵请求。
-
-上面 1–3 是文档一致性问题，不定就会让代码和协议长期不一致，建议先定这三个。
+7. **搜索后端第一版只做一个**（原计划两个）：Tavily。一个能用胜过两个都半成品，第二个等有人真的要换的时候再加。
+8. **压缩自动触发**，触发时在界面上说明"上下文已压缩"。询问会打断聊天节奏。
 

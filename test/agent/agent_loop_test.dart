@@ -96,7 +96,6 @@ void main() {
   const ModelSpec model = ModelSpec(
     id: 'fake-model',
     providerId: 'fake',
-    apiKind: ApiKind.anthropicMessages,
     displayName: 'Fake',
     contextWindow: 200000,
     maxOutputTokens: 8192,

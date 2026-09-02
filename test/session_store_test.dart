@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
 import 'package:wepchat/platform/workspace_paths.dart';
+import 'package:wepchat/state/app_settings.dart';
 import 'package:wepchat/state/session_store.dart';
 import 'package:wepchat/storage/storage.dart';
 
@@ -11,9 +12,14 @@ import 'package:wepchat/storage/storage.dart';
 ///
 /// 跨实例的持久化行为在 `test/integration/session_store_integration_test.dart`
 /// 里覆盖，这里只管"一个实例内部的状态怎么变"。
+///
+/// 这里不会真的发出请求：`AppSettings.memory()` 的种子 provider 都没有 key，
+/// 所以每次发送都停在"没配 key"的提示上，只留下用户那一条消息。想测真实
+/// 流式生成得用假适配器，那是适配器自己的测试在做的事。
 void main() {
   late Directory root;
   late WepStorage storage;
+  late AppSettings settings;
   late SessionStore store;
 
   setUp(() async {
@@ -22,15 +28,17 @@ void main() {
       dbPath: p.join(root.path, 'test.db'),
       blobRoot: p.join(root.path, 'blobs'),
     );
+    settings = AppSettings.memory();
     store = await SessionStore.load(
       storage: storage,
       workspaces: WorkspaceRoots(p.join(root.path, 'workspaces')),
-      defaultModel: 'Claude Sonnet 4.5',
+      settings: settings,
     );
   });
 
   tearDown(() async {
     store.dispose();
+    settings.dispose();
     await storage.close();
     if (root.existsSync()) root.deleteSync(recursive: true);
   });
@@ -46,8 +54,17 @@ void main() {
 
     expect(store.active.messages.length, equals(1));
     expect(store.active.messages.single.isUser, isTrue);
-    // M0 不伪造助手回复，所以只有一条
     expect(store.isGenerating, isFalse);
+  });
+
+  test('没配 key 时用户消息照样落库，失败走一次性提示', () async {
+    await store.sendMessage('你好');
+
+    // 输入框那边已经清空了，把用户刚打的字丢掉是最糟的处理方式。
+    expect(store.active.messages.length, equals(1));
+    expect(store.takeNotice(), isNotNull);
+    // 取过一次就没了，不会每次重绘都弹。
+    expect(store.takeNotice(), isNull);
   });
 
   test('首条消息顺带改标题（功能协议 §2.1）', () async {

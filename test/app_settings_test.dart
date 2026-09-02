@@ -4,7 +4,7 @@ import 'package:wepchat/state/app_settings.dart';
 
 void main() {
   test('相同 category + key 视为更新，不重复制造条目（功能协议 §7.2）', () {
-    final AppSettings settings = AppSettings();
+    final AppSettings settings = AppSettings.memory();
     addTearDown(settings.dispose);
     final int before = settings.memories.length;
 
@@ -32,7 +32,7 @@ void main() {
   });
 
   test('未声明的工具不会给出默认权限，而是抛错', () {
-    final AppSettings settings = AppSettings();
+    final AppSettings settings = AppSettings.memory();
     addTearDown(settings.dispose);
 
     expect(() => settings.permissionOf('rm_rf'), throwsArgumentError);
@@ -43,7 +43,7 @@ void main() {
   });
 
   test('工具权限有默认档位并且可以修改', () {
-    final AppSettings settings = AppSettings();
+    final AppSettings settings = AppSettings.memory();
     addTearDown(settings.dispose);
 
     settings.setPermission('write_file', ToolPermission.denied);
@@ -51,7 +51,7 @@ void main() {
   });
 
   test('空的工作区根目录不会覆盖原值', () {
-    final AppSettings settings = AppSettings();
+    final AppSettings settings = AppSettings.memory();
     addTearDown(settings.dispose);
     final String original = settings.workspaceRoot;
 

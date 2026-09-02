@@ -90,7 +90,7 @@ class _SessionListPanelState extends State<SessionListPanel> {
             icon: Icons.add,
             tooltip: '新建会话',
             onTap: () {
-              store.createSession(model: context.settings.defaultModel);
+              store.createSession(model: context.settings.defaultModelKey);
               widget.onNavigate?.call();
             },
           ),

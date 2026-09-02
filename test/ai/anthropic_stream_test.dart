@@ -17,7 +17,6 @@ const ModelSpec _model = ModelSpec(
   id: 'claude-sonnet-4-5',
   displayName: 'Claude Sonnet 4.5',
   providerId: 'anthropic',
-  apiKind: ApiKind.anthropicMessages,
   contextWindow: 200000,
   maxOutputTokens: 64000,
   compat: ModelCompat(

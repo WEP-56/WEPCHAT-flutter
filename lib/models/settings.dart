@@ -1,5 +1,8 @@
 import 'package:flutter/widgets.dart';
 
+/// 工作区根目录默认值。真实路径在首次用到时由 `wep_storage` 解析成绝对路径。
+const String kDefaultWorkspaceRoot = r'~/WePChat/workspaces';
+
 /// 单个工具的全局权限。作用于所有会话，不提供会话级特例（功能协议 §9）。
 enum ToolPermission {
   denied('禁止'),

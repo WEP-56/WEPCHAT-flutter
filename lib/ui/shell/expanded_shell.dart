@@ -74,7 +74,7 @@ class _ExpandedShellState extends State<ExpandedShell> {
                     icon: Icons.add,
                     tooltip: '新建会话',
                     onTap: () => context.sessions.createSession(
-                      model: context.settings.defaultModel,
+                      model: context.settings.defaultModelKey,
                     ),
                   ),
                 ],

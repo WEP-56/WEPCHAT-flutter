@@ -39,6 +39,14 @@ enum CacheControlFormat {
   anthropic,
 }
 
+T? _byName<T extends Enum>(Object? raw, List<T> values) {
+  if (raw is! String) return null;
+  for (final T value in values) {
+    if (value.name == raw) return value;
+  }
+  return null;
+}
+
 /// 一个模型的兼容标记集合。
 class ModelCompat {
   const ModelCompat({
@@ -92,6 +100,73 @@ class ModelCompat {
   /// 需要它的真实模型：OpenAI o 系列拒绝 temperature（必须省略，
   /// 传 1.0 也不行）。
   final bool supportsTemperature;
+
+  /// 只写与默认值不同的字段。
+  ///
+  /// settings.json 用户可能自己去改，九个标记全量写出来会把文件塞满噪音
+  /// ——绝大多数模型只有一两个标记非默认。
+  Map<String, Object?> toJson() {
+    const ModelCompat d = ModelCompat();
+    final Map<String, Object?> out = <String, Object?>{};
+
+    if (maxTokensField != d.maxTokensField) {
+      out['maxTokensField'] = maxTokensField;
+    }
+    if (supportsDeveloperRole != d.supportsDeveloperRole) {
+      out['supportsDeveloperRole'] = supportsDeveloperRole;
+    }
+    if (thinking != d.thinking) out['thinking'] = thinking.name;
+    if (cache != d.cache) out['cache'] = cache.name;
+    if (supportsPromptCacheKey != d.supportsPromptCacheKey) {
+      out['supportsPromptCacheKey'] = supportsPromptCacheKey;
+    }
+    if (requiresToolResultName != d.requiresToolResultName) {
+      out['requiresToolResultName'] = requiresToolResultName;
+    }
+    if (supportsParallelToolCalls != d.supportsParallelToolCalls) {
+      out['supportsParallelToolCalls'] = supportsParallelToolCalls;
+    }
+    if (visionInput != d.visionInput) out['visionInput'] = visionInput;
+    if (supportsTemperature != d.supportsTemperature) {
+      out['supportsTemperature'] = supportsTemperature;
+    }
+    return out;
+  }
+
+  /// 缺失的字段取默认值——[toJson] 就是按这个前提省略它们的。
+  static ModelCompat fromJson(Object? raw) {
+    if (raw is! Map<String, Object?>) return const ModelCompat();
+    const ModelCompat d = ModelCompat();
+
+    bool flag(String key, bool fallback) {
+      final Object? value = raw[key];
+      return value is bool ? value : fallback;
+    }
+
+    return ModelCompat(
+      maxTokensField: raw['maxTokensField'] as String? ?? d.maxTokensField,
+      supportsDeveloperRole: flag(
+        'supportsDeveloperRole',
+        d.supportsDeveloperRole,
+      ),
+      thinking: _byName(raw['thinking'], ThinkingFormat.values) ?? d.thinking,
+      cache: _byName(raw['cache'], CacheControlFormat.values) ?? d.cache,
+      supportsPromptCacheKey: flag(
+        'supportsPromptCacheKey',
+        d.supportsPromptCacheKey,
+      ),
+      requiresToolResultName: flag(
+        'requiresToolResultName',
+        d.requiresToolResultName,
+      ),
+      supportsParallelToolCalls: flag(
+        'supportsParallelToolCalls',
+        d.supportsParallelToolCalls,
+      ),
+      visionInput: flag('visionInput', d.visionInput),
+      supportsTemperature: flag('supportsTemperature', d.supportsTemperature),
+    );
+  }
 
   ModelCompat copyWith({
     String? maxTokensField,

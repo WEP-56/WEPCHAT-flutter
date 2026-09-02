@@ -4,9 +4,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
 import 'package:wepchat/platform/workspace_paths.dart';
+import 'package:wepchat/state/app_settings.dart';
 import 'package:wepchat/state/session_store.dart';
 import 'package:wepchat/storage/storage.dart';
 
+/// 会话状态跨实例的持久化行为。
+///
+/// 发送消息不会真的发出请求：`AppSettings.memory()` 的种子 provider 都没有
+/// key，所以每次发送都停在"没配 key"的提示上，落库的只有用户那一条。
 void main() {
   late Directory testRoot;
   late String dbPath;
@@ -32,15 +37,17 @@ void main() {
       dbPath: dbPath,
       blobRoot: blobRoot,
     );
+    final AppSettings settings = AppSettings.memory();
     final SessionStore store = await SessionStore.load(
       storage: storage,
       workspaces: WorkspaceRoots(p.join(testRoot.path, 'workspaces')),
-      defaultModel: 'Claude Sonnet 4.5',
+      settings: settings,
     );
     try {
       await block(store);
     } finally {
       store.dispose();
+      settings.dispose();
       await storage.close();
     }
   }

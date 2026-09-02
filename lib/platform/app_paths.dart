@@ -34,6 +34,10 @@ class AppPaths {
   /// 主库路径（存储设计 §4）。WAL 与 shm 由 SQLite 在同目录自动管理。
   String get databasePath => p.join(dataRoot.path, 'wepchat.db');
 
+  /// 设置文件路径（实施 TODO §13.4）。含明文 API key，所以必须在私有目录里，
+  /// 不能放工作区——工作区是用户会拿去分享的地方。
+  String get settingsPath => p.join(dataRoot.path, 'settings.json');
+
   /// 内容寻址的 blob 根目录。
   String get blobRoot => p.join(dataRoot.path, 'blobs');
 

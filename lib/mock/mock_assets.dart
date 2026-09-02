@@ -3,9 +3,6 @@
 /// 接入真实存储后，这里会被 `wep_storage` 提供的会话工作区替换。
 library;
 
-/// 设置页展示的工作区根目录默认值。
-const String kDefaultWorkspaceRoot = r'~/WePChat/workspaces';
-
 /// 会话工作区内的图片相对路径 → 打包资源路径。
 ///
 /// 纯前端阶段没有真实文件系统读取，用少量内置图片让画面接近真机效果；

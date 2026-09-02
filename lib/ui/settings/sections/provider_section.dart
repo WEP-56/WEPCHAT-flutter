@@ -1,33 +1,70 @@
+/// 模型服务：提供商列表 + 增删改（实施 TODO §10-4）。
+///
+/// 一个 provider 一行：名字、协议、Key 状态、模型数量。真正的编辑动作都在
+/// 弹窗里（`provider_dialog.dart` / `models_dialog.dart`），这一层只做导航。
+library;
+
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
-import '../../../mock/mock_settings.dart';
-import '../../../models/settings.dart';
+import '../../../ai/provider_config.dart';
+import '../../../state/app_scope.dart';
+import '../../../state/app_settings.dart';
 import '../../../theme/fonts.dart';
 import '../../../theme/palette.dart';
 import '../../widgets/controls.dart';
-import '../../widgets/toast.dart';
+import '../models_dialog.dart';
+import '../provider_dialog.dart';
 import '../settings_card.dart';
 
-/// 模型服务：供应商连接状态与可用模型。Key 只显示掩码。
 class ProviderSection extends StatelessWidget {
   const ProviderSection({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return SettingsCard(
-      title: '模型服务',
-      subtitle: 'API Key 保存在本机，只在请求时使用；界面永不显示明文。',
-      children: kProviders
-          .map((ProviderInfo info) => _ProviderRow(info: info))
-          .toList(),
+    final AppSettings settings = context.settings;
+    return ListenableBuilder(
+      listenable: settings,
+      builder: (BuildContext context, Widget? _) {
+        return SettingsCard(
+          title: '模型服务',
+          subtitle: 'API Key 保存在本机，只在请求时使用；界面永不显示明文。',
+          children: <Widget>[
+            for (final ProviderConfig p in settings.providers)
+              _ProviderRow(
+                config: p,
+                modelCount: settings.modelsOfProvider(p.id).length,
+              ),
+            const SizedBox(height: 6),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                onPressed: () => unawaited(_add(context)),
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text('添加提供商'),
+              ),
+            ),
+          ],
+        );
+      },
     );
+  }
+
+  /// 新建之后直接把模型弹窗接上去：刚填完 key 的下一步一定是挑模型，
+  /// 让用户自己再点一次「模型」是多余的一步。
+  Future<void> _add(BuildContext context) async {
+    final ProviderConfig? created = await showProviderDialog(context);
+    if (created == null || !context.mounted) return;
+    await showModelsDialog(context, created.id);
   }
 }
 
 class _ProviderRow extends StatelessWidget {
-  const _ProviderRow({required this.info});
+  const _ProviderRow({required this.config, required this.modelCount});
 
-  final ProviderInfo info;
+  final ProviderConfig config;
+  final int modelCount;
 
   @override
   Widget build(BuildContext context) {
@@ -39,84 +76,97 @@ class _ProviderRow extends StatelessWidget {
         children: <Widget>[
           Row(
             children: <Widget>[
-              Container(
-                width: 22,
-                height: 22,
-                decoration: BoxDecoration(
-                  color: info.badgeColor.withValues(alpha: 0.16),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Center(
-                  child: Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: info.badgeColor,
-                      shape: BoxShape.circle,
-                    ),
+              Flexible(
+                child: Text(
+                  config.displayName,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: palette.text1,
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-              Text(
-                info.name,
-                style: TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w600,
-                  color: palette.text1,
-                ),
-              ),
-              const SizedBox(width: 8),
-              info.connected
-                  ? const Pill('已连接', tone: PillTone.good)
-                  : const Pill('未配置'),
+              const SizedBox(width: 6),
+              Pill(config.apiKind.label, tone: PillTone.accent),
+              const SizedBox(width: 6),
+              config.isConfigured
+                  ? const Pill('已配置', tone: PillTone.good)
+                  : const Pill('未配置 Key', tone: PillTone.warn),
               const Spacer(),
               IconAction(
                 icon: Icons.tune,
-                tooltip: '配置',
+                tooltip: '编辑',
                 size: 15,
                 box: 28,
-                onTap: () => showAppToast(context, '编辑供应商（预览版未接入存储）'),
+                onTap: () => unawaited(showProviderDialog(
+                  context,
+                  existing: config,
+                )),
               ),
+              // 内置 provider 不给删（删了下次启动还会回来）。
+              if (!config.builtin)
+                IconAction(
+                  icon: Icons.delete_outline,
+                  tooltip: '删除',
+                  size: 15,
+                  box: 28,
+                  tone: IconActionTone.danger,
+                  onTap: () => unawaited(_confirmRemove(context)),
+                ),
             ],
           ),
-          const SizedBox(height: 6),
-          Text(
-            info.maskedKey,
-            style: AppFonts.mono(size: 11, color: palette.text3),
-          ),
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: info.models
-                .map((String model) => _ModelChip(label: model))
-                .toList(),
+          const SizedBox(height: 4),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  '${config.maskedKey} · ${config.baseUrl}',
+                  overflow: TextOverflow.ellipsis,
+                  style: AppFonts.mono(size: 10.5, color: palette.text3),
+                ),
+              ),
+              const SizedBox(width: 8),
+              TextButton.icon(
+                onPressed: () => unawaited(showModelsDialog(
+                  context,
+                  config.id,
+                )),
+                icon: const Icon(Icons.list_alt, size: 15),
+                label: Text(modelCount == 0 ? '添加模型' : '模型 $modelCount'),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
-}
 
-class _ModelChip extends StatelessWidget {
-  const _ModelChip({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final AppPalette palette = context.palette;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-      decoration: BoxDecoration(
-        color: palette.bgRaise,
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(fontSize: 10.5, color: palette.text2),
+  Future<void> _confirmRemove(BuildContext context) async {
+    final AppSettings settings = context.settings;
+    final int count = settings.modelsOfProvider(config.id).length;
+    final bool? ok = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext ctx) => AlertDialog(
+        title: const Text('删除提供商', style: TextStyle(fontSize: 15)),
+        content: Text(
+          count == 0
+              ? '删除「${config.displayName}」？'
+              : '删除「${config.displayName}」，它下面的 $count 个模型也会一起删掉。',
+          style: const TextStyle(fontSize: 13),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('删除'),
+          ),
+        ],
       ),
     );
+    if (ok ?? false) settings.removeProvider(config.id);
   }
 }

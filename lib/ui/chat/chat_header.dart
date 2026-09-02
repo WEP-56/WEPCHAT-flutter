@@ -2,9 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../mock/mock_assets.dart';
+import '../../ai/model_catalog.dart';
+import '../../ai/provider_config.dart';
 import '../../models/chat.dart';
 import '../../state/app_scope.dart';
+import '../../state/app_settings.dart';
 import '../../theme/palette.dart';
 import '../widgets/controls.dart';
 
@@ -76,6 +78,11 @@ class ChatHeader extends StatelessWidget {
   }
 }
 
+/// 顶栏的模型选择器，按提供商分组。
+///
+/// 选项来自设置里的模型清单（用户自己配的），分组头是 provider 名——同一个
+/// 模型 id 挂在两个 provider 下是常见的（官方端点 + 中转站），不写 provider
+/// 名就分不清点的是哪个。
 class _ModelPicker extends StatelessWidget {
   const _ModelPicker({required this.session});
 
@@ -83,59 +90,114 @@ class _ModelPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final AppPalette palette = context.palette;
-    return PopupMenuButton<String>(
-      tooltip: '切换模型',
-      position: PopupMenuPosition.under,
-      onSelected: (String model) =>
-          context.sessions.setModel(session.id, model),
-      itemBuilder: (BuildContext _) {
-        return kAvailableModels.map((String model) {
-          return PopupMenuItem<String>(
-            value: model,
-            height: 38,
+    final AppSettings settings = context.settings;
+    return ListenableBuilder(
+      listenable: settings,
+      builder: (BuildContext context, Widget? _) {
+        final AppPalette palette = context.palette;
+        final ModelSpec? current = settings.modelByKey(session.model);
+
+        return PopupMenuButton<String>(
+          tooltip: '切换模型',
+          position: PopupMenuPosition.under,
+          onSelected: (String key) =>
+              context.sessions.setModel(session.id, key),
+          itemBuilder: (BuildContext _) => _entries(settings, palette),
+          child: Container(
+            height: 28,
+            padding: const EdgeInsets.symmetric(horizontal: 9),
+            decoration: BoxDecoration(
+              color: palette.bgRaise,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Text(
+                  // 会话记的 key 在设置里找不到（模型被删了）时显示原文，
+                  // 让用户看得出"这个会话指着一个没了的模型"。
+                  current?.displayName ??
+                      (session.model.isEmpty ? '选择模型' : session.model),
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w500,
+                    color: current == null ? palette.warn : palette.text1,
+                  ),
+                ),
+                const SizedBox(width: 3),
+                Icon(Icons.expand_more, size: 15, color: palette.text3),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  List<PopupMenuEntry<String>> _entries(
+    AppSettings settings,
+    AppPalette palette,
+  ) {
+    final List<PopupMenuEntry<String>> entries = <PopupMenuEntry<String>>[];
+
+    for (final (ProviderConfig p, List<ModelSpec> models)
+        in settings.modelsByProvider) {
+      // 空 provider 不进菜单：设置页要显示它（提示去加模型），
+      // 但菜单里一个没有内容的组头只是噪音。
+      if (models.isEmpty) continue;
+      if (entries.isNotEmpty) entries.add(const PopupMenuDivider());
+      entries.add(
+        PopupMenuItem<String>(
+          enabled: false,
+          height: 26,
+          child: Text(
+            p.displayName,
+            style: TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.3,
+              color: palette.text3,
+            ),
+          ),
+        ),
+      );
+      for (final ModelSpec m in models) {
+        final bool active = m.key == session.model;
+        entries.add(
+          PopupMenuItem<String>(
+            value: m.key,
+            height: 36,
             child: Row(
               children: <Widget>[
                 Icon(
-                  model == session.model
+                  active
                       ? Icons.radio_button_checked
                       : Icons.radio_button_unchecked,
                   size: 14,
-                  color: model == session.model
-                      ? palette.accent
-                      : palette.text3,
+                  color: active ? palette.accent : palette.text3,
                 ),
                 const SizedBox(width: 8),
-                Text(model, style: const TextStyle(fontSize: 12.5)),
+                Text(m.displayName, style: const TextStyle(fontSize: 12.5)),
               ],
             ),
-          );
-        }).toList();
-      },
-      child: Container(
-        height: 28,
-        padding: const EdgeInsets.symmetric(horizontal: 9),
-        decoration: BoxDecoration(
-          color: palette.bgRaise,
-          borderRadius: BorderRadius.circular(8),
+          ),
+        );
+      }
+    }
+
+    if (entries.isEmpty) {
+      entries.add(
+        PopupMenuItem<String>(
+          enabled: false,
+          height: 36,
+          child: Text(
+            '还没有模型，去设置页添加',
+            style: TextStyle(fontSize: 12, color: palette.text3),
+          ),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Text(
-              session.model,
-              style: TextStyle(
-                fontSize: 11.5,
-                fontWeight: FontWeight.w500,
-                color: palette.text1,
-              ),
-            ),
-            const SizedBox(width: 3),
-            Icon(Icons.expand_more, size: 15, color: palette.text3),
-          ],
-        ),
-      ),
-    );
+      );
+    }
+    return entries;
   }
 }
 
@@ -243,7 +305,7 @@ class _SessionMenu extends StatelessWidget {
     if (confirmed != true || !context.mounted) return;
     await context.sessions.deleteSession(
       session.id,
-      fallbackModel: context.settings.defaultModel,
+      fallbackModel: context.settings.defaultModelKey,
     );
   }
 }

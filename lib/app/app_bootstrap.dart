@@ -1,4 +1,5 @@
 import '../platform/app_paths.dart';
+import '../platform/settings_store.dart';
 import '../platform/workspace_paths.dart';
 import '../state/app_settings.dart';
 import '../state/session_store.dart';
@@ -44,7 +45,9 @@ class AppBootstrap {
     // 否则列表里会带着已经不可能完成的"生成中"状态。
     final List<String> interrupted = await storage.reconcileInterruptedRuns();
 
-    final AppSettings settings = AppSettings();
+    final AppSettings settings = AppSettings.load(
+      SettingsStore.atPath(paths.settingsPath),
+    );
 
     // 测试给了 rootOverride 时工作区也放到那个临时目录下，别去动用户主目录。
     final WorkspaceRoots workspaces = WorkspaceRoots.resolve(
@@ -55,7 +58,7 @@ class AppBootstrap {
     final SessionStore sessions = await SessionStore.load(
       storage: storage,
       workspaces: workspaces,
-      defaultModel: settings.defaultModel,
+      settings: settings,
     );
 
     return AppBootstrap._(

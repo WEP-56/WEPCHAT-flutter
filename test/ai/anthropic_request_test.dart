@@ -13,7 +13,6 @@ const ModelSpec _sonnet = ModelSpec(
   id: 'claude-sonnet-4-5',
   displayName: 'Claude Sonnet 4.5',
   providerId: 'anthropic',
-  apiKind: ApiKind.anthropicMessages,
   contextWindow: 200000,
   maxOutputTokens: 64000,
   compat: ModelCompat(
@@ -28,7 +27,6 @@ const ModelSpec _noCache = ModelSpec(
   id: 'claude-plain',
   displayName: 'Plain',
   providerId: 'anthropic',
-  apiKind: ApiKind.anthropicMessages,
   contextWindow: 100000,
   maxOutputTokens: 8000,
 );
@@ -121,7 +119,6 @@ void main() {
         id: 'x',
         displayName: 'X',
         providerId: 'anthropic',
-        apiKind: ApiKind.anthropicMessages,
         contextWindow: 1000,
         maxOutputTokens: 100,
         compat: ModelCompat(supportsTemperature: false),
