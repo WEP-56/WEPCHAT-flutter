@@ -1,7 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../../mock/mock_assets.dart';
 import '../../models/workspace.dart';
+import '../../state/app_scope.dart';
 import '../../theme/palette.dart';
 
 IconData fileKindIcon(FileKind kind) {
@@ -84,9 +87,17 @@ class WorkspaceImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final String? asset = kWorkspaceImageAssets[file];
-    final Widget content = asset == null
-        ? _placeholder(context)
-        : Image.asset(asset, fit: BoxFit.cover);
+    final String absolute = context.sessions.workspacePathFor(
+      context.sessions.active.id,
+    );
+    final File actual = File(
+      '$absolute${Platform.pathSeparator}${file.replaceAll('/', Platform.pathSeparator)}',
+    );
+    final Widget content = asset != null
+        ? Image.asset(asset, fit: BoxFit.cover)
+        : actual.existsSync()
+        ? Image.file(actual, fit: BoxFit.cover)
+        : _placeholder(context);
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(10),

@@ -1,9 +1,14 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../../app/app_nav.dart';
 import '../../mock/file_bodies.dart';
 import '../../models/content.dart';
 import '../../models/workspace.dart';
+import '../../platform/workspace_file_service.dart';
+import '../../state/app_scope.dart';
+import '../../models/markdown_blocks.dart';
 import '../../theme/fonts.dart';
 import '../../theme/palette.dart';
 import '../blocks/blocks_view.dart';
@@ -51,7 +56,15 @@ class FileViewerScreen extends StatelessWidget {
           IconAction(
             icon: Icons.download_outlined,
             tooltip: '导出',
-            onTap: () => showAppToast(context, '导出文件（预览版未接入文件系统）'),
+            onTap: () async {
+              final String path = context.sessions.workspacePathFor(
+                context.sessions.active.id,
+              );
+              final bool ok = await WorkspaceFileService(path).export(file);
+              if (context.mounted) {
+                showAppToast(context, ok ? '已导出 $file' : '导出已取消或失败');
+              }
+            },
           ),
           const SizedBox(width: 6),
         ],
@@ -75,7 +88,32 @@ class FileViewerScreen extends StatelessWidget {
 
   Widget _buildContent(BuildContext context, FileKind kind) {
     if (kind == FileKind.png || kind == FileKind.jpg) {
-      return WorkspaceImage(file: file);
+      final String path = context.sessions.workspacePathFor(
+        context.sessions.active.id,
+      );
+      return File(pathForRelative(path, file)).existsSync()
+          ? Image.file(File(pathForRelative(path, file)), fit: BoxFit.contain)
+          : WorkspaceImage(file: file);
+    }
+
+    // HTML 文件不依赖 mock 内容表：工作区里实际生成的任意 .html/.htm
+    // 都应能直接交给系统默认浏览器打开。
+    if (kind == FileKind.html) return _HtmlEntry(file: file);
+
+    final String workspace = context.sessions.workspacePathFor(
+      context.sessions.active.id,
+    );
+    final String absolute = pathForRelative(workspace, file);
+    if (File(absolute).existsSync() &&
+        <FileKind>{
+          FileKind.md,
+          FileKind.txt,
+          FileKind.py,
+          FileKind.css,
+          FileKind.json,
+          FileKind.csv,
+        }.contains(kind)) {
+      return _RealTextPreview(path: absolute, kind: kind);
     }
 
     final FileBody? body = kFileBodies[file];
@@ -107,6 +145,39 @@ class FileViewerScreen extends StatelessWidget {
         text: note,
       ),
     };
+  }
+}
+
+String pathForRelative(String root, String relative) =>
+    '$root${Platform.pathSeparator}${relative.replaceAll('/', Platform.pathSeparator)}';
+
+class _RealTextPreview extends StatelessWidget {
+  const _RealTextPreview({required this.path, required this.kind});
+
+  final String path;
+  final FileKind kind;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<String>(
+      future: File(path).readAsString(),
+      builder: (BuildContext context, AsyncSnapshot<String> snapshot) {
+        if (snapshot.hasError) {
+          return _Notice(
+            icon: Icons.error_outline,
+            text: '文件读取失败：${snapshot.error}',
+          );
+        }
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final String text = snapshot.data!;
+        if (kind == FileKind.md) {
+          return BlocksView(blocks: parseMarkdownBlocks(text), gap: 12);
+        }
+        return CodeBlockView(block: CodeBlock(kind.name, text));
+      },
+    );
   }
 }
 
@@ -144,14 +215,14 @@ class _HtmlEntry extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            '页面内容需要在沙盒里渲染，点击下面的按钮进入预览。',
+            'HTML 文件将交给系统默认浏览器打开。',
             style: TextStyle(fontSize: 12, color: palette.text3),
           ),
           const SizedBox(height: 12),
           FilledButton.icon(
             onPressed: () => AppNav.openHtml(context, file: file),
-            icon: const Icon(Icons.play_arrow, size: 16),
-            label: const Text('打开预览'),
+            icon: const Icon(Icons.open_in_browser, size: 16),
+            label: const Text('用浏览器打开'),
           ),
         ],
       ),

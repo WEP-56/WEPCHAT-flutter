@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
-import 'package:url_launcher/url_launcher.dart';
 
+import '../../browser/browser_launcher.dart';
 import '../../theme/fonts.dart';
 import '../../theme/palette.dart';
 
@@ -53,7 +53,7 @@ class InlineText extends StatelessWidget {
       if (match.start > cursor) {
         spans.add(TextSpan(text: text.substring(cursor, match.start)));
       }
-      spans.add(_spanFor(match.group(0)!, match, base, palette));
+      spans.add(_spanFor(context, match.group(0)!, match, base, palette));
       cursor = match.end;
     }
     if (cursor < text.length) {
@@ -64,13 +64,15 @@ class InlineText extends StatelessWidget {
   }
 
   InlineSpan _spanFor(
+    BuildContext context,
     String token,
     RegExpMatch match,
     TextStyle base,
     AppPalette palette,
   ) {
-    // 角标 [1] —— 捕获组有值且不是链接。
-    if (match.group(1) != null) {
+    // 角标 [1] —— 只有内层数字捕获组才代表引用角标。
+    // 外层 group(1) 包住了整个 token，链接/粗体等匹配时同样有值。
+    if (match.group(2) != null) {
       return WidgetSpan(
         alignment: PlaceholderAlignment.top,
         child: Padding(
@@ -106,7 +108,7 @@ class InlineText extends StatelessWidget {
 
     // 链接 [文字](url) 或图片 ![alt](url)。图片在行内位置渲染成小图。
     if (token.startsWith('[') || token.startsWith('![')) {
-      return _linkSpan(token, palette);
+      return _linkSpan(context, token, palette);
     }
 
     // 行内公式 $...$。渲染失败就退回原始文本：模型偶尔会吐出
@@ -127,7 +129,7 @@ class InlineText extends StatelessWidget {
     return TextSpan(text: token);
   }
 
-  InlineSpan _linkSpan(String token, AppPalette palette) {
+  InlineSpan _linkSpan(BuildContext context, String token, AppPalette palette) {
     final bool image = token.startsWith('![');
     final int close = token.indexOf('](');
     if (close < 0) return TextSpan(text: token);
@@ -154,7 +156,7 @@ class InlineText extends StatelessWidget {
       child: MouseRegion(
         cursor: url.isEmpty ? MouseCursor.defer : SystemMouseCursors.click,
         child: GestureDetector(
-          onTap: url.isEmpty ? null : () => openExternalUrl(url),
+          onTap: url.isEmpty ? null : () => openWebUrl(context, url),
           child: child,
         ),
       ),
@@ -177,15 +179,4 @@ class InlineText extends StatelessWidget {
       child: Icon(Icons.image_outlined, size: 15, color: palette.text3),
     );
   }
-}
-
-/// 在系统浏览器里打开链接。
-///
-/// 只放行 http / https：模型生成的内容不可信，`file:` 会指向本地文件，
-/// 自定义 scheme 可能拉起别的应用。
-Future<void> openExternalUrl(String url) async {
-  final Uri? uri = Uri.tryParse(url);
-  if (uri == null) return;
-  if (uri.scheme != 'http' && uri.scheme != 'https') return;
-  await launchUrl(uri, mode: LaunchMode.externalApplication);
 }

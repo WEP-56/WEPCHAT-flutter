@@ -117,6 +117,15 @@ class SessionStore extends ChangeNotifier {
   List<ChatSession> _sessions;
   String _activeId;
 
+  /// 当前会话工作区的绝对路径，供文件查看等应用内入口使用。
+  ///
+  /// 路径根由启动时解析，避免 UI 直接拼接仍可能包含 `~` 的设置值。
+  String workspacePathFor(String sessionId) => _workspaces.pathFor(sessionId);
+
+  Future<void> refreshWorkspace([String? sessionId]) async {
+    await _reload(sessionId ?? _activeId);
+  }
+
   /// 进行中的生成任务。全局只允许一个。
   ///
   /// 这是个刻意的简化：日常聊天客户端同时发两个请求的场景基本不存在，

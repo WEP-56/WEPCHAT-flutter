@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../app/responsive.dart';
 import '../../theme/palette.dart';
 import 'sections/appearance_section.dart';
+import 'sections/browser_section.dart';
 import 'sections/memory_section.dart';
 import 'sections/model_section.dart';
 import 'sections/provider_section.dart';
@@ -28,6 +29,7 @@ const List<_SectionSpec> _kSections = <_SectionSpec>[
   _SectionSpec('memory', '记忆', Icons.psychology_alt_outlined),
   _SectionSpec('appearance', '外观', Icons.palette_outlined),
   _SectionSpec('workspace', '工作区', Icons.folder_outlined),
+  _SectionSpec('browser', '浏览器', Icons.language_outlined),
 ];
 
 /// 设置页。宽屏左侧是分区导航，窄屏是一条竖向长列表。
@@ -229,6 +231,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       'memory' => const MemorySection(),
       'appearance' => const AppearanceSection(),
       'workspace' => const WorkspaceSection(),
+      'browser' => const BrowserSection(),
       _ => throw ArgumentError.value(id, 'id', '未知设置分区'),
     };
   }

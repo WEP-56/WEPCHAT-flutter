@@ -58,7 +58,7 @@ class CsvFileBody extends FileBody {
   final List<List<String>> rows;
 }
 
-/// HTML 产物，可进入沙盒预览页。
+/// HTML 产物，可交给系统默认浏览器打开。
 class HtmlFileBody extends FileBody {
   const HtmlFileBody();
 }

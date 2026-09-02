@@ -35,6 +35,9 @@ dependencies:
   flutter_math_fork: ^0.7.4
   desktop_drop: ^0.8.4
   super_clipboard: ^0.9.1
+  webview_flutter: ^4.14.1
+  shared_preferences: ^2.5.5
+  flutter_inappwebview: ^6.1.5
 
 dev_dependencies:
   flutter_test:

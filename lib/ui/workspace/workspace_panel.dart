@@ -5,6 +5,7 @@ import '../../app/app_nav.dart';
 import '../../models/chat.dart';
 import '../../models/workspace.dart';
 import '../../platform/open_directory.dart';
+import '../../platform/workspace_file_service.dart';
 import '../../state/app_scope.dart';
 import '../../state/session_store.dart';
 import '../../theme/fonts.dart';
@@ -123,6 +124,21 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
             style: TextStyle(fontSize: 10.5, color: palette.text3),
           ),
           const Spacer(),
+          IconAction(
+            icon: Icons.upload_file_outlined,
+            tooltip: '上传文件',
+            onTap: () => _upload(context),
+          ),
+          IconAction(
+            icon: Icons.note_add_outlined,
+            tooltip: '新建文件',
+            onTap: () => _createFile(context),
+          ),
+          IconAction(
+            icon: Icons.create_new_folder_outlined,
+            tooltip: '新建文件夹',
+            onTap: () => _createDirectory(context),
+          ),
           if (widget.onCollapse != null)
             IconAction(
               icon: widget.collapseIcon ?? Icons.chevron_right,
@@ -181,6 +197,94 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
     );
   }
 
+  WorkspaceFileService _service(BuildContext context) => WorkspaceFileService(
+    context.sessions.workspacePathFor(context.sessions.active.id),
+  );
+
+  Future<void> _upload(BuildContext context) async {
+    final SessionStore store = context.sessions;
+    final WorkspaceFileService service = _service(context);
+    final int count = await service.upload();
+    if (!mounted) return;
+    await store.refreshWorkspace();
+    if (mounted) {
+      showAppToast(this.context, count == 0 ? '未上传文件' : '已上传 $count 个文件');
+    }
+  }
+
+  Future<void> _createFile(BuildContext context) async {
+    final SessionStore store = context.sessions;
+    final WorkspaceFileService service = _service(context);
+    final TextEditingController controller = TextEditingController();
+    final String? name = await showDialog<String>(
+      context: context,
+      builder: (BuildContext ctx) => AlertDialog(
+        title: const Text('新建文件'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: '例如 notes.md'),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text),
+            child: const Text('创建'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (name == null || name.trim().isEmpty) return;
+    final String? created = await service.createFile(name.trim());
+    if (!mounted) return;
+    await store.refreshWorkspace();
+    if (mounted) {
+      showAppToast(
+        this.context,
+        created == null ? '创建失败：文件已存在或路径无效' : '已创建 $created',
+      );
+    }
+  }
+
+  Future<void> _createDirectory(BuildContext context) async {
+    final SessionStore store = context.sessions;
+    final WorkspaceFileService service = _service(context);
+    final TextEditingController controller = TextEditingController();
+    final String? name = await showDialog<String>(
+      context: context,
+      builder: (BuildContext ctx) => AlertDialog(
+        title: const Text('新建文件夹'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: '例如 assets'),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text),
+            child: const Text('创建'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (name == null || name.trim().isEmpty) return;
+    final bool created = await service.createDirectory(name.trim());
+    if (!mounted) return;
+    await store.refreshWorkspace();
+    if (mounted) {
+      showAppToast(this.context, created ? '已创建文件夹 $name' : '创建文件夹失败：路径无效');
+    }
+  }
+
   Widget _buildImageGrid(BuildContext context, List<WorkspaceFile> images) {
     if (images.isEmpty) return const _EmptyHint('本次会话还没有图片');
     final List<String> gallery = images
@@ -200,8 +304,7 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
 
   Widget _buildFooter(BuildContext context) {
     final AppPalette palette = context.palette;
-    final String path = sessionWorkspacePath(
-      context.settings.workspaceRoot,
+    final String path = context.sessions.workspacePathFor(
       context.sessions.active.id,
     );
 
@@ -211,7 +314,9 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
         onTap: () async {
           final bool ok = await openDirectoryInExplorer(path);
           if (!context.mounted) return;
-          if (!ok) showAppToast(context, '无法打开目录');
+          if (!ok) {
+            showAppToast(context, '无法打开目录');
+          }
         },
         borderRadius: BorderRadius.circular(8),
         child: Padding(
@@ -219,11 +324,7 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
-              Icon(
-                Icons.folder_open_outlined,
-                size: 15,
-                color: palette.text2,
-              ),
+              Icon(Icons.folder_open_outlined, size: 15, color: palette.text2),
               const SizedBox(width: 6),
               Text(
                 '打开目录',
@@ -246,7 +347,9 @@ class _FileRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
     return InkWell(
-      onTap: () => AppNav.openFile(context, file: file.name),
+      onTap: file.kind == FileKind.html
+          ? () => AppNav.openHtml(context, file: file.name)
+          : () => AppNav.openFile(context, file: file.name),
       borderRadius: BorderRadius.circular(8),
       hoverColor: palette.hover,
       child: Padding(
@@ -273,10 +376,59 @@ class _FileRow extends StatelessWidget {
                 ],
               ),
             ),
+            IconButton(
+              tooltip: '导出',
+              icon: const Icon(Icons.download_outlined, size: 17),
+              onPressed: () => _export(context),
+            ),
+            IconButton(
+              tooltip: '删除',
+              icon: const Icon(Icons.delete_outline, size: 17),
+              onPressed: () => _delete(context),
+            ),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _export(BuildContext context) async {
+    final SessionStore store = context.sessions;
+    final String root = store.workspacePathFor(store.active.id);
+    final bool ok = await WorkspaceFileService(root).export(file.name);
+    if (context.mounted) {
+      showAppToast(context, ok ? '已导出 ${file.name}' : '导出已取消或失败');
+    }
+  }
+
+  Future<void> _delete(BuildContext context) async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext ctx) => AlertDialog(
+        title: const Text('删除文件？'),
+        content: Text(file.name),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    if (!context.mounted) return;
+    final SessionStore store = context.sessions;
+    final String root = store.workspacePathFor(store.active.id);
+    final bool ok = await WorkspaceFileService(root).delete(file.name);
+    if (!context.mounted) return;
+    await store.refreshWorkspace();
+    if (context.mounted) {
+      showAppToast(context, ok ? '已删除 ${file.name}' : '删除失败');
+    }
   }
 }
 
