@@ -60,9 +60,9 @@ class TurnRunner {
     required WepStorage storage,
     required String sessionId,
     required void Function(TurnDraft) paint,
-  })  : _storage = storage,
-        _sessionId = sessionId,
-        _paint = paint;
+  }) : _storage = storage,
+       _sessionId = sessionId,
+       _paint = paint;
 
   final WepStorage _storage;
   final String _sessionId;
@@ -72,6 +72,12 @@ class TurnRunner {
   final List<ToolCall> _cards = <ToolCall>[];
   final Map<String, DateTime> _startedAt = <String, DateTime>{};
 
+  /// 本轮开始的时刻，用来算落库时写进 payload 的耗时。
+  ///
+  /// 取构造时刻而不是 `run()` 的第一行：调用方就是在发请求前一步 new 出来的，
+  /// 而字段初始化不会被 `await` 推迟。
+  final DateTime _turnStartedAt = DateTime.now();
+
   ai.ChatMessageModel? _lastAssistant;
   ai.TokenUsage _usage = const ai.TokenUsage();
 
@@ -79,8 +85,11 @@ class TurnRunner {
   ///
   /// loop 承诺不抛（§4-2、§5），所以这里没有 try/catch：真抛了说明 loop
   /// 有 bug，让它炸出来比在这里吞掉好——调用方那层还有一道兜底。
-  Future<TurnResult> run(AgentLoop loop, List<ai.ChatMessageModel> history,
-      CancellationToken token) async {
+  Future<TurnResult> run(
+    AgentLoop loop,
+    List<ai.ChatMessageModel> history,
+    CancellationToken token,
+  ) async {
     ai.StopReason reason = ai.StopReason.stop;
     String? errorMessage;
     bool hitMaxIterations = false;
@@ -107,7 +116,10 @@ class TurnRunner {
           _cards.add(runningToolCall(call));
           _repaint(_lastAssistant);
 
-        case AgentToolEnd(:final ai.ToolCallPart call, :final ToolResult result):
+        case AgentToolEnd(
+          :final ai.ToolCallPart call,
+          :final ToolResult result,
+        ):
           await _finishTool(call, result);
 
         case AgentDone():
@@ -135,8 +147,9 @@ class TurnRunner {
   /// 工具结果立刻落盘，然后更新卡片（§9-8、存储设计 §6.1）。
   Future<void> _finishTool(ai.ToolCallPart call, ToolResult result) async {
     final DateTime? started = _startedAt.remove(call.id);
-    final Duration? elapsed =
-        started == null ? null : DateTime.now().difference(started);
+    final Duration? elapsed = started == null
+        ? null
+        : DateTime.now().difference(started);
 
     await _storage.appendEntry(
       _sessionId,
@@ -181,6 +194,14 @@ class TurnRunner {
     // 失败原因写进 payload 而不是丢掉：用户要看得见"为什么没回复"，
     // 而这条消息本身已经被 stopReason 挡在下次请求之外了。
     if (message.errorMessage != null) payload['error'] = message.errorMessage;
+    // 思考 token 和耗时进 payload 而不是提成列：`entries` 只给上下文组装要用的
+    // 字段开列（存储设计 §5.2），这两项纯展示，重开一次迁移不值得。
+    if (message.usage.reasoningTokens > 0) {
+      payload['reasoningTokens'] = message.usage.reasoningTokens;
+    }
+    payload['elapsedMs'] = DateTime.now()
+        .difference(_turnStartedAt)
+        .inMilliseconds;
 
     await _storage.appendEntry(
       _sessionId,
@@ -210,7 +231,8 @@ class TurnRunner {
   ) async {
     // 一个字都没吐出来就被中断：不留空气泡，当这一轮没发生过。
     // 工具结果不受影响——它们已经各自落库了，副作用真的发生过。
-    final bool silentAbort = reason == ai.StopReason.aborted &&
+    final bool silentAbort =
+        reason == ai.StopReason.aborted &&
         (_lastAssistant?.text.trim().isEmpty ?? true);
 
     if (hitMaxIterations) {
@@ -226,8 +248,7 @@ class TurnRunner {
         ai.StopReason.aborted => RunOutcome.aborted,
         ai.StopReason.stop ||
         ai.StopReason.toolUse ||
-        ai.StopReason.length =>
-          RunOutcome.completed,
+        ai.StopReason.length => RunOutcome.completed,
       },
       // `length` 且有工具调用时 loop 会带 errorMessage 上来，用户得知道
       // 这一轮的工具没执行；silentAbort 是用户自己按的停止，不用再提示。

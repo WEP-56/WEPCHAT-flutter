@@ -16,9 +16,9 @@ class AnthropicApi extends ProviderApi {
     required String apiKey,
     String baseUrl = 'https://api.anthropic.com',
     StreamPoster? poster,
-  })  : _apiKey = apiKey,
-        _baseUrl = baseUrl,
-        _post = poster ?? postStreaming;
+  }) : _apiKey = apiKey,
+       _baseUrl = baseUrl,
+       _post = poster ?? postStreaming;
 
   final String _apiKey;
   final String _baseUrl;
@@ -30,10 +30,7 @@ class AnthropicApi extends ProviderApi {
   static const String _apiVersion = '2023-06-01';
 
   @override
-  Stream<StreamEvent> stream(
-    ProviderRequest request,
-    CancellationToken token,
-  ) {
+  Stream<StreamEvent> stream(ProviderRequest request, CancellationToken token) {
     // async* 而不是 async：事件要边收边吐，攒完再返回就没有流式效果了。
     return _stream(request, token);
   }
@@ -231,22 +228,26 @@ class _AnthropicAccumulator {
         case _BlockKind.thinking:
           if (text.isNotEmpty) {
             final String sig = state.signature.toString();
-            parts.add(ThinkingPart(
-              text,
-              signature: sig.isEmpty ? null : sig,
-              modelId: modelId,
-            ));
+            parts.add(
+              ThinkingPart(
+                text,
+                signature: sig.isEmpty ? null : sig,
+                modelId: modelId,
+              ),
+            );
           }
 
         case _BlockKind.toolUse:
           // 流还没结束时 text 是半个 JSON，parse 一定失败——
           // 失败就先给空参数，等收全了下一次 snapshot 自然就对了（§4-7）。
           final Map<String, Object?> args = _tryParseArgs(text);
-          parts.add(ToolCallPart(
-            id: state.id ?? '',
-            name: state.name ?? '',
-            arguments: args,
-          ));
+          parts.add(
+            ToolCallPart(
+              id: state.id ?? '',
+              name: state.name ?? '',
+              arguments: args,
+            ),
+          );
       }
     }
     return parts;
@@ -256,7 +257,9 @@ class _AnthropicAccumulator {
     if (raw.isEmpty) return const <String, Object?>{};
     try {
       final Object? decoded = jsonDecode(raw);
-      return decoded is Map<String, Object?> ? decoded : const <String, Object?>{};
+      return decoded is Map<String, Object?>
+          ? decoded
+          : const <String, Object?>{};
     } on FormatException {
       return const <String, Object?>{};
     }
@@ -281,10 +284,7 @@ class _AnthropicAccumulator {
     return TokenUsage(
       inputTokens: pick('input_tokens', current.inputTokens),
       outputTokens: pick('output_tokens', current.outputTokens),
-      cacheReadTokens: pick(
-        'cache_read_input_tokens',
-        current.cacheReadTokens,
-      ),
+      cacheReadTokens: pick('cache_read_input_tokens', current.cacheReadTokens),
       cacheWriteTokens: pick(
         'cache_creation_input_tokens',
         current.cacheWriteTokens,
@@ -305,10 +305,10 @@ class _BlockState {
     return switch (type) {
       'thinking' => _BlockState(kind: _BlockKind.thinking),
       'tool_use' => _BlockState(
-          kind: _BlockKind.toolUse,
-          id: block['id'] as String?,
-          name: block['name'] as String?,
-        ),
+        kind: _BlockKind.toolUse,
+        id: block['id'] as String?,
+        name: block['name'] as String?,
+      ),
       _ => _BlockState(kind: _BlockKind.text),
     };
   }

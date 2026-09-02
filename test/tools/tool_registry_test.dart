@@ -17,10 +17,10 @@ class _ThrowingTool extends Tool {
 
   @override
   ToolDefinition get definition => const ToolDefinition(
-        name: 'boom',
-        description: '总是抛异常',
-        schema: <String, Object?>{'type': 'object'},
-      );
+    name: 'boom',
+    description: '总是抛异常',
+    schema: <String, Object?>{'type': 'object'},
+  );
 
   // 借用「读取工作区」这个默认放行的档位，让它能真的跑到抛异常那一步。
   @override
@@ -41,10 +41,10 @@ class _CancellingTool extends Tool {
 
   @override
   ToolDefinition get definition => const ToolDefinition(
-        name: 'slow',
-        description: '检查中断',
-        schema: <String, Object?>{'type': 'object'},
-      );
+    name: 'slow',
+    description: '检查中断',
+    schema: <String, Object?>{'type': 'object'},
+  );
 
   @override
   Future<ToolResult> execute(
@@ -62,10 +62,10 @@ class _WritingTool extends Tool {
 
   @override
   ToolDefinition get definition => const ToolDefinition(
-        name: 'write',
-        description: '写文件',
-        schema: <String, Object?>{'type': 'object'},
-      );
+    name: 'write',
+    description: '写文件',
+    schema: <String, Object?>{'type': 'object'},
+  );
 
   @override
   String get permissionId => 'write_file';
@@ -74,16 +74,15 @@ class _WritingTool extends Tool {
   Future<ToolResult> execute(
     Map<String, Object?> arguments,
     ToolContext context,
-  ) async =>
-      ToolResult.ok('written');
+  ) async => ToolResult.ok('written');
 }
 
 void main() {
   ToolContext contextWith(CancellationToken token) => ToolContext(
-        sessionId: 'session-1',
-        workspace: WorkspaceGuard('/tmp/ws'),
-        token: token,
-      );
+    sessionId: 'session-1',
+    workspace: WorkspaceGuard('/tmp/ws'),
+    token: token,
+  );
 
   final ToolContext liveContext = contextWith(CancellationToken.none);
 
@@ -251,10 +250,9 @@ void main() {
 
     test('被拒时工具根本不执行，结果是 denied', () async {
       settings.setPermission('write_file', ToolPermission.denied);
-      final ToolRegistry registry = ToolRegistry(
-        const <Tool>[_WritingTool()],
-        gate: PermissionGate(settings: settings),
-      );
+      final ToolRegistry registry = ToolRegistry(const <Tool>[
+        _WritingTool(),
+      ], gate: PermissionGate(settings: settings));
 
       final ToolResult result = await registry.dispatch(
         'write',
@@ -268,10 +266,9 @@ void main() {
 
     test('允许时照常执行', () async {
       settings.setPermission('write_file', ToolPermission.allowed);
-      final ToolRegistry registry = ToolRegistry(
-        const <Tool>[_WritingTool()],
-        gate: PermissionGate(settings: settings),
-      );
+      final ToolRegistry registry = ToolRegistry(const <Tool>[
+        _WritingTool(),
+      ], gate: PermissionGate(settings: settings));
 
       final ToolResult result = await registry.dispatch(
         'write',
@@ -285,10 +282,10 @@ void main() {
 
     test('拒绝与失败是两种结果，不合并成一个 bool', () async {
       settings.setPermission('write_file', ToolPermission.denied);
-      final ToolRegistry registry = ToolRegistry(
-        const <Tool>[_WritingTool(), _ThrowingTool()],
-        gate: PermissionGate(settings: settings),
-      );
+      final ToolRegistry registry = ToolRegistry(const <Tool>[
+        _WritingTool(),
+        _ThrowingTool(),
+      ], gate: PermissionGate(settings: settings));
 
       final ToolResult denied = await registry.dispatch(
         'write',
@@ -329,7 +326,8 @@ void main() {
         expect(
           declared,
           contains(t.permissionId),
-          reason: '${t.name} 的 permissionId 没在 kToolPermissionSpecs 里，'
+          reason:
+              '${t.name} 的 permissionId 没在 kToolPermissionSpecs 里，'
               '权限门会退到「询问」',
         );
       }

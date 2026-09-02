@@ -137,6 +137,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       color: palette.bgSide,
       child: ListView(
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+        // 关掉语义索引：跟内容区的理由一样（flutter#182444），导航列表里的按钮也带
+        // tooltip，套上 IndexedSemantics 会让多个 OverlayPortal 锚点被合并，
+        // Windows accessibility bridge 在滚动时报 AXTree 错误。
+        addSemanticIndexes: false,
         children: _kSections.map((_SectionSpec spec) {
           final bool selected = spec.id == _activeId;
           return Padding(

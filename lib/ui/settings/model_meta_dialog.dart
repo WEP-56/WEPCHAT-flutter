@@ -24,17 +24,17 @@ Future<void> showModelMetaDialog(BuildContext context, ModelSpec model) {
 }
 
 String _thinkingLabel(ThinkingFormat f) => switch (f) {
-      ThinkingFormat.none => '不支持',
-      ThinkingFormat.openaiReasoningEffort => 'OpenAI reasoning_effort',
-      ThinkingFormat.anthropicThinking => 'Anthropic thinking',
-      ThinkingFormat.deepseekReasoningContent => 'DeepSeek reasoning_content',
-      ThinkingFormat.qwenEnableThinking => 'Qwen enable_thinking',
-    };
+  ThinkingFormat.none => '不支持',
+  ThinkingFormat.openaiReasoningEffort => 'OpenAI reasoning_effort',
+  ThinkingFormat.anthropicThinking => 'Anthropic thinking',
+  ThinkingFormat.deepseekReasoningContent => 'DeepSeek reasoning_content',
+  ThinkingFormat.qwenEnableThinking => 'Qwen enable_thinking',
+};
 
 String _cacheLabel(CacheControlFormat f) => switch (f) {
-      CacheControlFormat.none => '不需要（或服务端自动）',
-      CacheControlFormat.anthropic => 'Anthropic cache_control',
-    };
+  CacheControlFormat.none => '不需要（或服务端自动）',
+  CacheControlFormat.anthropic => 'Anthropic cache_control',
+};
 
 class _ModelMetaDialog extends StatefulWidget {
   const _ModelMetaDialog({required this.model});
@@ -117,9 +117,8 @@ class _ModelMetaDialogState extends State<_ModelMetaDialog> {
                 label: '视觉输入',
                 desc: '能不能发图片给它。',
                 value: _compat.visionInput,
-                onChanged: (bool v) => setState(
-                  () => _compat = _compat.copyWith(visionInput: v),
-                ),
+                onChanged: (bool v) =>
+                    setState(() => _compat = _compat.copyWith(visionInput: v)),
               ),
               SwitchRow(
                 label: '支持 temperature',
@@ -139,9 +138,8 @@ class _ModelMetaDialogState extends State<_ModelMetaDialog> {
                     for (final ThinkingFormat f in ThinkingFormat.values)
                       SegOption<ThinkingFormat>(f, _thinkingLabel(f)),
                   ],
-                  onChanged: (ThinkingFormat f) => setState(
-                    () => _compat = _compat.copyWith(thinking: f),
-                  ),
+                  onChanged: (ThinkingFormat f) =>
+                      setState(() => _compat = _compat.copyWith(thinking: f)),
                 ),
               ),
               _pickerRow(
@@ -155,9 +153,8 @@ class _ModelMetaDialogState extends State<_ModelMetaDialog> {
                         in CacheControlFormat.values)
                       SegOption<CacheControlFormat>(f, _cacheLabel(f)),
                   ],
-                  onChanged: (CacheControlFormat f) => setState(
-                    () => _compat = _compat.copyWith(cache: f),
-                  ),
+                  onChanged: (CacheControlFormat f) =>
+                      setState(() => _compat = _compat.copyWith(cache: f)),
                 ),
               ),
               const SizedBox(height: 2),
@@ -222,9 +219,8 @@ class _ModelMetaDialogState extends State<_ModelMetaDialog> {
             SegOption<String>('max_tokens', 'max_tokens'),
             SegOption<String>('max_completion_tokens', 'max_completion'),
           ],
-          onChanged: (String v) => setState(
-            () => _compat = _compat.copyWith(maxTokensField: v),
-          ),
+          onChanged: (String v) =>
+              setState(() => _compat = _compat.copyWith(maxTokensField: v)),
         ),
       ),
       SwitchRow(

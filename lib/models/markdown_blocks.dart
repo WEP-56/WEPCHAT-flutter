@@ -37,6 +37,16 @@ List<ContentBlock> parseMarkdownBlocks(String text) {
       continue;
     }
 
+    // 块级公式：$$ 开头。和代码围栏一样收集到闭合处，未闭合当已闭合
+    // ——流式生成时最后一块必然未闭合。
+    if (line.trim().startsWith(r'$$')) {
+      final _MathFence fence = _parseMathFence(lines, i);
+      // 只有 $$ 没有内容时不产生空块（流式刚吐出定界符的那一帧）。
+      if (fence.latex.trim().isNotEmpty) blocks.add(MathBlock(fence.latex));
+      i = fence.endIndex;
+      continue;
+    }
+
     // 标题：# 开头。
     final int hashes = _headingHashes(line);
     if (hashes > 0) {
@@ -86,6 +96,17 @@ List<ContentBlock> parseMarkdownBlocks(String text) {
       }
     }
 
+    // 图片独占一行（![alt](url)）。整段只有这一张图才成块，图片混在
+    // 文字里时按普通文本渲染——行内图片与文字的混排是另一件事。
+    if (_isImageLine(line) && _isImageOnlyParagraph(lines, i)) {
+      final _ImageRun? image = _parseImageLine(line);
+      if (image != null) {
+        blocks.add(ImageBlock(image.src, alt: image.alt));
+        i++;
+        continue;
+      }
+    }
+
     // 默认：段落。连续多行合并（直到空行 / 特殊块开始）。
     final _TextRun run = _collectParagraph(lines, i);
     blocks.add(ParagraphBlock(run.text));
@@ -122,6 +143,42 @@ _CodeFence _parseCodeFence(List<String> lines, int start) {
 
   // 未闭合：当作已闭合（流式生成时最后一块必然未闭合）。
   return _CodeFence(lang, codeLines.join('\n'), i);
+}
+
+// ────────────────── 块级公式 ──────────────────
+
+class _MathFence {
+  const _MathFence(this.latex, this.endIndex);
+
+  final String latex;
+  final int endIndex;
+}
+
+/// 收集 `$$` 公式块。支持两种形态：
+/// - `$$x^2$$` —— 定界符和内容在同一行；
+/// - 独立的 `$$` 行打开，后续行是内容，直到 `$$` 行或文本结束。
+_MathFence _parseMathFence(List<String> lines, int start) {
+  final String first = lines[start].trim();
+
+  // 同行闭合：$$ 内容 $$。
+  if (first.length > 4 && first.endsWith(r'$$')) {
+    return _MathFence(first.substring(2, first.length - 2), start + 1);
+  }
+
+  // 独立的打开行。
+  final List<String> body = <String>[];
+  int i = start + 1;
+  while (i < lines.length) {
+    final String line = lines[i].trim();
+    if (line.startsWith(r'$$')) {
+      return _MathFence(body.join('\n'), i + 1);
+    }
+    body.add(lines[i]);
+    i++;
+  }
+
+  // 未闭合：当作已闭合（流式生成时最后一块必然未闭合）。
+  return _MathFence(body.join('\n'), i);
 }
 
 // ────────────────── 标题 ──────────────────
@@ -201,9 +258,7 @@ _ListRun _collectList(List<String> lines, int start, {required bool ordered}) {
     if (!match) break;
 
     final String trimmed = line.trimLeft();
-    final int prefixEnd = ordered
-        ? trimmed.indexOf(RegExp(r'\.\s')) + 2
-        : 2;
+    final int prefixEnd = ordered ? trimmed.indexOf(RegExp(r'\.\s')) + 2 : 2;
     items.add(trimmed.substring(prefixEnd).trim());
     i++;
   }
@@ -271,6 +326,50 @@ bool _isTableSeparator(String line) {
   return true;
 }
 
+// ────────────────── 图片 ──────────────────
+
+class _ImageRun {
+  const _ImageRun(this.src, this.alt);
+
+  final String src;
+  final String? alt;
+}
+
+bool _isImageLine(String line) {
+  final String trimmed = line.trim();
+  return trimmed.startsWith('![') &&
+      trimmed.indexOf('](') > 0 &&
+      trimmed.endsWith(')');
+}
+
+/// 这一段（从 [start] 收集）是否是"只有一张图"的段落。
+///
+/// 只看下一行：段落收集是连续的，下一行如果还是正文，这张图就混在文字
+/// 里，交回段落分支渲染。
+bool _isImageOnlyParagraph(List<String> lines, int start) {
+  final int next = start + 1;
+  if (next >= lines.length) return true;
+  final String line = lines[next];
+  return line.trim().isEmpty ||
+      line.trimLeft().startsWith('```') ||
+      line.trim().startsWith(r'$$') ||
+      _headingHashes(line) > 0 ||
+      line.trimLeft().startsWith('>') ||
+      _isUnorderedListItem(line) ||
+      _isOrderedListItem(line) ||
+      _startsTable(lines, next);
+}
+
+_ImageRun? _parseImageLine(String line) {
+  final String trimmed = line.trim();
+  final int open = trimmed.indexOf('](');
+  if (open < 0) return null;
+  final String alt = trimmed.substring(2, open);
+  final String src = trimmed.substring(open + 2, trimmed.length - 1).trim();
+  if (src.isEmpty) return null;
+  return _ImageRun(src, alt);
+}
+
 // ────────────────── 段落 ──────────────────
 
 /// 这一行是不是一个表格的开头（有表头也有分隔行）。
@@ -289,9 +388,11 @@ _TextRun _collectParagraph(List<String> lines, int start) {
 
   while (i < lines.length) {
     final String line = lines[i];
-    // 空行或下一个块的开始：段落结束。
+    // 空行或下一个块的开始：段落结束。$$ 也要断——段落吃掉打开行，
+    // 公式块就永远等不到闭合了。
     if (line.trim().isEmpty ||
         line.trimLeft().startsWith('```') ||
+        line.trim().startsWith(r'$$') ||
         _headingHashes(line) > 0 ||
         line.trimLeft().startsWith('>') ||
         _isUnorderedListItem(line) ||

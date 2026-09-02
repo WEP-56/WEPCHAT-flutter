@@ -7,11 +7,11 @@ import '../../models/chat.dart';
 import '../../state/app_scope.dart';
 import '../../state/session_store.dart';
 import '../../theme/palette.dart';
+import '../settings/dialog_bits.dart';
 import '../widgets/toast.dart';
 import 'chat_header.dart';
 import 'composer.dart';
 import 'message_item.dart';
-import 'usage_bar.dart';
 
 /// 中间聊天栏：顶栏 + 消息流 + 输入区。
 class ChatView extends StatefulWidget {
@@ -55,7 +55,8 @@ class _ChatViewState extends State<ChatView> {
     // 在 build 里读位置：此刻 position 还是上一帧的布局结果，所以能判断
     // 「新内容进来之前用户是不是贴着底部」。放到 postFrame 里读就晚了——
     // 那时 maxScrollExtent 已经被新内容撑大，看起来永远像是离底很远。
-    final bool following = !_scroll.hasClients ||
+    final bool following =
+        !_scroll.hasClients ||
         _scroll.position.maxScrollExtent - _scroll.position.pixels <
             _kFollowSlack;
 
@@ -130,13 +131,12 @@ class _ChatViewState extends State<ChatView> {
               Expanded(
                 child: session.messages.isEmpty
                     ? const _EmptyState()
-                    : _buildList(context, session),
+                    : _buildList(context, store, session),
               ),
               if (store.activeWasInterrupted)
                 _InterruptedBanner(
                   onDismiss: () => store.clearInterrupted(session.id),
                 ),
-              UsageBar(usage: store.lastUsage),
               Composer(
                 isGenerating: store.isGenerating,
                 onSend: store.sendMessage,
@@ -149,42 +149,171 @@ class _ChatViewState extends State<ChatView> {
     );
   }
 
-  Widget _buildList(BuildContext context, ChatSession session) {
+  Widget _buildList(
+    BuildContext context,
+    SessionStore store,
+    ChatSession session,
+  ) {
     final bool compact = isCompact(context);
     final List<String> gallery = <String>[
       for (final ChatMessage message in session.messages)
         for (final ImageResult image in message.images) image.file,
     ];
 
-    return ListView.separated(
-      controller: _scroll,
-      padding: EdgeInsets.symmetric(
-        horizontal: compact ? 14 : 20,
-        vertical: 18,
-      ),
-      // 不给 item 加语义索引：`IndexedSemantics` 会把一条消息合并成一个语义节点，
-      // 连带并进它里面多个 Tooltip 的 OverlayPortal 锚点（图片卡片的「导出 / 查看」、
-      // 多个代码块的「复制代码」）。上游 flutter#182444 在这种情况下只保留第一个
-      // 锚点的遍历标识，Windows 的 accessibility bridge 于是在滚动时不停报
-      // `Failed to update ui::AXTree`。消息列表要保持懒加载，只能关掉索引。
-      addSemanticIndexes: false,
-      itemCount: session.messages.length,
-      separatorBuilder: (BuildContext _, int _) => const SizedBox(height: 22),
-      itemBuilder: (BuildContext context, int index) {
-        return Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 720),
-            child: SizedBox(
-              width: double.infinity,
-              child: MessageItemView(
-                message: session.messages[index],
-                gallery: gallery,
+    // 整个列表包在一个 `SelectionArea` 里，而不是每条消息各包一个：跨消息
+    // 拖选是复制一段对话最直接的办法，分成一个个孤岛就只能一条条来。
+    return SelectionArea(
+      child: ListView.separated(
+        controller: _scroll,
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 14 : 20,
+          vertical: 18,
+        ),
+        // 不给 item 加语义索引：`IndexedSemantics` 会把一条消息合并成一个语义节点，
+        // 连带并进它里面多个 Tooltip 的 OverlayPortal 锚点（图片卡片的「导出 / 查看」、
+        // 多个代码块的「复制代码」）。上游 flutter#182444 在这种情况下只保留第一个
+        // 锚点的遍历标识，Windows 的 accessibility bridge 于是在滚动时不停报
+        // `Failed to update ui::AXTree`。消息列表要保持懒加载，只能关掉索引。
+        addSemanticIndexes: false,
+        itemCount: session.messages.length,
+        separatorBuilder: (BuildContext _, int _) => const SizedBox(height: 22),
+        itemBuilder: (BuildContext context, int index) {
+          final ChatMessage message = session.messages[index];
+          // 生成中不给重发和编辑：store 那两条路径本来就会直接返回，
+          // 按钮亮着却没反应比没有按钮更糟。
+          final bool idle = !store.isGenerating && message.seq > 0;
+
+          return Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 720),
+              child: SizedBox(
+                width: double.infinity,
+                child: MessageItemView(
+                  message: message,
+                  gallery: gallery,
+                  onRegenerate: idle
+                      ? () => _regenerate(store, session, index)
+                      : null,
+                  onEdit: idle && message.isUser
+                      ? () => _edit(store, session, index)
+                      : null,
+                ),
               ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
+  }
+
+  /// 这条之后还剩几条消息。
+  ///
+  /// 撤回不可逆——追加式日志里"撤回的撤回"不存在（存储设计 §8），所以只有
+  /// 「重做最后一轮」这种明显安全的情况才不问一声。
+  static int _trailing(ChatSession session, int index) =>
+      session.messages.length - 1 - index;
+
+  /// 撤回到这条消息，让模型重新回答（存储设计 §8）。
+  Future<void> _regenerate(
+    SessionStore store,
+    ChatSession session,
+    int index,
+  ) async {
+    final ChatMessage message = session.messages[index];
+    final int trailing = _trailing(session, index);
+    // 用户消息后面紧跟的那条就是它的回复，重问一次本来就要连回复一起撤，
+    // 不算意外；助手消息只要后面还有东西就是在改历史。
+    final bool surprising = message.isUser ? trailing > 1 : trailing > 0;
+
+    if (surprising) {
+      final bool ok = await _confirmDrop(
+        title: message.isUser ? '重新生成' : '重新回答',
+        trailing: trailing,
+      );
+      if (!ok || !mounted) return;
+    }
+    await store.regenerate(message);
+  }
+
+  /// 改掉自己说过的一句话，从那里重新问（存储设计 §8，实施 TODO §9-10）。
+  Future<void> _edit(SessionStore store, ChatSession session, int index) async {
+    final ChatMessage message = session.messages[index];
+    final int trailing = _trailing(session, index);
+    final AppPalette palette = context.palette;
+    final TextEditingController controller = TextEditingController(
+      text: message.rawText,
+    );
+
+    final String? text = await showDialog<String>(
+      context: context,
+      builder: (BuildContext ctx) => AlertDialog(
+        title: const Text('编辑并重发', style: TextStyle(fontSize: 15)),
+        content: SizedBox(
+          width: dialogWidth(ctx),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              TextField(
+                controller: controller,
+                autofocus: true,
+                minLines: 3,
+                maxLines: 10,
+                style: const TextStyle(fontSize: 13.5),
+                decoration: const InputDecoration(border: OutlineInputBorder()),
+              ),
+              if (trailing > 0) ...<Widget>[
+                const SizedBox(height: 8),
+                Text(
+                  '这条之后的 $trailing 条消息会被撤回，不能恢复。',
+                  style: TextStyle(fontSize: 11, color: palette.text3),
+                ),
+              ],
+            ],
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(controller.text),
+            child: const Text('重发'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (text == null || !mounted) return;
+    await store.editUserMessage(message, text);
+  }
+
+  Future<bool> _confirmDrop({
+    required String title,
+    required int trailing,
+  }) async {
+    final bool? ok = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext ctx) => AlertDialog(
+        title: Text(title, style: const TextStyle(fontSize: 15)),
+        content: Text(
+          '这条之后的 $trailing 条消息会被撤回，不能恢复。',
+          style: const TextStyle(fontSize: 13),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(title),
+          ),
+        ],
+      ),
+    );
+    return ok == true;
   }
 }
 

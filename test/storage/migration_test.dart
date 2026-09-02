@@ -108,18 +108,15 @@ void main() {
         insertSession(db, id: 's1', title: '升级前', headSeq: 3);
       });
 
-      withDb(
-        (Database db) {
-          expect(db.userVersion, equals(2));
-          expect(columnsOf(db, 'sessions'), contains('pinned'));
+      withDb((Database db) {
+        expect(db.userVersion, equals(2));
+        expect(columnsOf(db, 'sessions'), contains('pinned'));
 
-          final Row row = db.select('SELECT * FROM sessions').first;
-          expect(row['title'], equals('升级前'));
-          expect(row['head_seq'], equals(3));
-          expect(row['pinned'], equals(0));
-        },
-        migrations: <Migration>[...kMigrations, _v2],
-      );
+        final Row row = db.select('SELECT * FROM sessions').first;
+        expect(row['title'], equals('升级前'));
+        expect(row['head_seq'], equals(3));
+        expect(row['pinned'], equals(0));
+      }, migrations: <Migration>[...kMigrations, _v2]);
     });
 
     test('已经是 v2 的库再开一次不重跑', () {
@@ -134,13 +131,10 @@ void main() {
     });
 
     test('一次开库连跑多条待办迁移', () {
-      withDb(
-        (Database db) {
-          expect(db.userVersion, equals(2));
-          expect(columnsOf(db, 'sessions'), contains('pinned'));
-        },
-        migrations: <Migration>[...kMigrations, _v2],
-      );
+      withDb((Database db) {
+        expect(db.userVersion, equals(2));
+        expect(columnsOf(db, 'sessions'), contains('pinned'));
+      }, migrations: <Migration>[...kMigrations, _v2]);
     });
   });
 

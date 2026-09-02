@@ -25,25 +25,25 @@ class ListFilesTool extends Tool {
 
   @override
   ToolDefinition get definition => const ToolDefinition(
-        name: 'list_files',
-        description:
-            '列出会话工作区里的文件和目录，带类型、大小和修改时间。'
-            '不传 path 就列工作区根目录。路径一律是相对工作区根的相对路径。',
-        schema: <String, Object?>{
-          'type': 'object',
-          'properties': <String, Object?>{
-            'path': <String, Object?>{
-              'type': 'string',
-              'description': '要列的目录，相对工作区根。留空表示根目录。',
-            },
-            'recursive': <String, Object?>{
-              'type': 'boolean',
-              'description': '是否递归子目录，默认 true。',
-            },
-          },
-          'required': <String>[],
+    name: 'list_files',
+    description:
+        '列出会话工作区里的文件和目录，带类型、大小和修改时间。'
+        '不传 path 就列工作区根目录。路径一律是相对工作区根的相对路径。',
+    schema: <String, Object?>{
+      'type': 'object',
+      'properties': <String, Object?>{
+        'path': <String, Object?>{
+          'type': 'string',
+          'description': '要列的目录，相对工作区根。留空表示根目录。',
         },
-      );
+        'recursive': <String, Object?>{
+          'type': 'boolean',
+          'description': '是否递归子目录，默认 true。',
+        },
+      },
+      'required': <String>[],
+    },
+  );
 
   @override
   Future<ToolResult> execute(
@@ -66,8 +66,10 @@ class ListFilesTool extends Tool {
     bool overflowed = false;
 
     try {
-      await for (final FileSystemEntity entity
-          in dir.list(recursive: recursive, followLinks: false)) {
+      await for (final FileSystemEntity entity in dir.list(
+        recursive: recursive,
+        followLinks: false,
+      )) {
         if (context.token.isCancelled) return ToolResult.cancelled();
         if (rows.length >= _kMaxEntries) {
           overflowed = true;
@@ -94,8 +96,10 @@ class ListFilesTool extends Tool {
       buf.writeln(row.line);
     }
     if (overflowed) {
-      buf.writeln('[已达 $_kMaxEntries 项上限，还有未列出的内容。'
-          '请指定子目录再列一次]');
+      buf.writeln(
+        '[已达 $_kMaxEntries 项上限，还有未列出的内容。'
+        '请指定子目录再列一次]',
+      );
     }
 
     return ToolResult.ok(
@@ -113,7 +117,9 @@ class ListFilesTool extends Tool {
   /// 那次调用会被守卫按"经链接指向外面"拒掉，模型收到一条自相矛盾的
   /// 反馈（明明你列给我的）。不列比列了再拒好。
   static _Row? _describe(FileSystemEntity entity, String root) {
-    final String rel = p.relative(entity.path, from: root).replaceAll(r'\', '/');
+    final String rel = p
+        .relative(entity.path, from: root)
+        .replaceAll(r'\', '/');
 
     if (entity is Link) return null;
     if (entity is Directory) {
@@ -126,7 +132,8 @@ class ListFilesTool extends Tool {
 
     return _Row(
       path: rel,
-      line: '  $rel  ${_size(stat.size)}  '
+      line:
+          '  $rel  ${_size(stat.size)}  '
           '${stat.modified.toLocal().toString().substring(0, 16)}',
     );
   }

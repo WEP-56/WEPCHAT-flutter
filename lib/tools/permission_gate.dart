@@ -49,9 +49,8 @@ class PermissionAnswer {
 }
 
 /// 问用户。返回 null 表示没人能回答（界面还没接上），按拒绝处理。
-typedef PermissionPrompt = Future<PermissionAnswer?> Function(
-  PermissionRequest request,
-);
+typedef PermissionPrompt =
+    Future<PermissionAnswer?> Function(PermissionRequest request);
 
 /// 一次裁决的结果。
 class PermissionVerdict {
@@ -72,8 +71,8 @@ class PermissionVerdict {
 /// 把 A 会话的授权带到了 B 会话。
 class PermissionGate {
   PermissionGate({required AppSettings settings, PermissionPrompt? prompt})
-      : _settings = settings,
-        _prompt = prompt;
+    : _settings = settings,
+      _prompt = prompt;
 
   final AppSettings _settings;
   final PermissionPrompt? _prompt;

@@ -46,8 +46,9 @@ Future<List<String>> fetchModelIds(
   final http.Client c = client ?? http.Client();
   try {
     final Uri url = Uri.parse('${_trimSlash(config.baseUrl)}/models');
-    final http.Response response =
-        await c.get(url, headers: _headersFor(config)).timeout(_kProbeTimeout);
+    final http.Response response = await c
+        .get(url, headers: _headersFor(config))
+        .timeout(_kProbeTimeout);
 
     if (response.statusCode != 200) {
       throw ApiError(
@@ -113,11 +114,7 @@ List<String> _parseModelIds(String body) {
 
 /// 一次可用性探测的结果。
 class ProbeResult {
-  const ProbeResult._({
-    required this.ok,
-    required this.message,
-    this.elapsed,
-  });
+  const ProbeResult._({required this.ok, required this.message, this.elapsed});
 
   factory ProbeResult.success(Duration elapsed, String reply) {
     return ProbeResult._(
@@ -199,12 +196,12 @@ Map<String, String> _headersFor(ProviderConfig config) {
   // 抽一个共享函数要把两处的差异都参数化，反而更绕。
   return switch (config.apiKind) {
     ApiKind.anthropicMessages => <String, String>{
-        'x-api-key': config.apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-    ApiKind.openaiCompletions ||
-    ApiKind.openaiResponses =>
-      <String, String>{'authorization': 'Bearer ${config.apiKey}'},
+      'x-api-key': config.apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    ApiKind.openaiCompletions || ApiKind.openaiResponses => <String, String>{
+      'authorization': 'Bearer ${config.apiKey}',
+    },
   };
 }
 

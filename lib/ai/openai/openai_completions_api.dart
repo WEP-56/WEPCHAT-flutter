@@ -21,9 +21,9 @@ class OpenAiCompletionsApi extends ProviderApi {
     required String apiKey,
     String baseUrl = 'https://api.openai.com/v1',
     StreamPoster? poster,
-  })  : _apiKey = apiKey,
-        _baseUrl = _trimTrailingSlash(baseUrl),
-        _post = poster ?? postStreaming;
+  }) : _apiKey = apiKey,
+       _baseUrl = _trimTrailingSlash(baseUrl),
+       _post = poster ?? postStreaming;
 
   final String _apiKey;
   final String _baseUrl;
@@ -32,10 +32,7 @@ class OpenAiCompletionsApi extends ProviderApi {
   final StreamPoster _post;
 
   @override
-  Stream<StreamEvent> stream(
-    ProviderRequest request,
-    CancellationToken token,
-  ) {
+  Stream<StreamEvent> stream(ProviderRequest request, CancellationToken token) {
     return _stream(request, token);
   }
 

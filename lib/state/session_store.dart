@@ -18,6 +18,7 @@ import '../models/tool_call.dart';
 import '../models/workspace.dart';
 import '../platform/workspace_guard.dart';
 import '../platform/workspace_paths.dart';
+import '../platform/workspace_scanner.dart';
 import '../storage/storage.dart';
 import '../tools/permission_gate.dart';
 import '../tools/tool_registry.dart';
@@ -42,12 +43,12 @@ class SessionStore extends ChangeNotifier {
     required List<ChatSession> sessions,
     required String activeId,
     required PermissionGate gate,
-  })  : _storage = storage,
-        _workspaces = workspaces,
-        _settings = settings,
-        _sessions = sessions,
-        _activeId = activeId,
-        _gate = gate;
+  }) : _storage = storage,
+       _workspaces = workspaces,
+       _settings = settings,
+       _sessions = sessions,
+       _activeId = activeId,
+       _gate = gate;
 
   /// 打开存储里的会话列表，必要时补一个空会话。
   ///
@@ -63,7 +64,7 @@ class SessionStore extends ChangeNotifier {
     required AppSettings settings,
     PermissionPrompt? permissionPrompt,
   }) async {
-    final List<ChatSession> sessions = await _loadAll(storage);
+    final List<ChatSession> sessions = await _loadAll(storage, workspaces);
 
     if (sessions.isEmpty) {
       // 空库首启：建一个会话，保证 [active] 始终有值（界面依赖这条不变量）。
@@ -127,15 +128,6 @@ class SessionStore extends ChangeNotifier {
   /// 写进历史会永远留在记录里，用户改完设置也擦不掉。
   String? _notice;
 
-  /// 最近一轮的累计用量（实施 TODO §10-5、§6-12）。
-  ///
-  /// 只留最近一轮而不是全会话累计：全会话的量要从 `entries.usage_*` 汇总，
-  /// 那是一次查询，等 M3 做成本统计时一起做。现在界面要的是"刚才这轮花了
-  /// 多少"，尤其是 `cacheRead` 有没有生效。
-  ai.TokenUsage? _lastUsage;
-
-  ai.TokenUsage? get lastUsage => _lastUsage;
-
   /// 上次退出时正在生成、没能正常结束的会话（实施 TODO §10-6、§9-7）。
   ///
   /// 由 `AppBootstrap` 在启动时扫出来交进来。只做提示不自动重发（§13.5 已定）：
@@ -190,8 +182,11 @@ class SessionStore extends ChangeNotifier {
 
   /// 新建空会话并切换过去。[model] 是 `ModelSpec.key`。
   Future<ChatSession> createSession({required String model}) async {
-    final SessionRecord record =
-        await _createRecord(_storage, _workspaces, model);
+    final SessionRecord record = await _createRecord(
+      _storage,
+      _workspaces,
+      model,
+    );
     final ChatSession session = _toChatSession(record, const <EntryRecord>[]);
     _sessions = <ChatSession>[session, ..._sessions];
     _activeId = session.id;
@@ -200,10 +195,7 @@ class SessionStore extends ChangeNotifier {
   }
 
   /// 删除会话；删掉最后一个时补一个空会话，保证 [active] 始终有值。
-  Future<void> deleteSession(
-    String id, {
-    required String fallbackModel,
-  }) async {
+  Future<void> deleteSession(String id, {required String fallbackModel}) async {
     if (_sessions.every((ChatSession s) => s.id != id)) {
       throw ArgumentError.value(id, 'id', '会话不存在');
     }
@@ -238,19 +230,75 @@ class SessionStore extends ChangeNotifier {
     _patch(id, (ChatSession s) => s.copyWith(model: model));
   }
 
-  /// 落一条用户消息，然后请模型回复。
-  ///
-  /// 首条消息顺带把标题从"新会话"改成用户第一句话（功能协议 §2.1）。
-  /// 用户消息**先落库**再考虑能不能发请求：没配 key 的时候把用户刚打的字
-  /// 丢掉是最糟的处理方式，输入框那边已经清空了。
+  /// 发一条新消息：落库 + 请模型回复。
   Future<void> sendMessage(String text) async {
     final String trimmed = text.trim();
     if (trimmed.isEmpty) return;
     if (_run != null) return; // 同时只跑一个。
 
     final ChatSession session = active;
-    final bool isFirst = session.messages.isEmpty;
+    await _askWithUserMessage(
+      session,
+      trimmed,
+      isFirst: session.messages.isEmpty,
+    );
+  }
 
+  /// 重发：撤回这条消息之后的历史，让模型重新回答（存储设计 §8）。
+  ///
+  /// - 传**用户消息**：留着它本身，撤回它之后的一切，用同一句话再问一次。
+  /// - 传**助手消息**：连它一起撤回，这一轮重新回答。
+  ///
+  /// 撤回不删条目，只追加一条 `truncate` 标记；被撤回的区间从上下文和界面上
+  /// 一起消失。传**助手消息**时那一轮的工具结果留着：它们的 seq 比助手消息
+  /// 小，落在撤回区间之外，而副作用真的发生过（存储设计 §6.1），界面上留着
+  /// 那几张卡片是诚实的。
+  Future<void> regenerate(ChatMessage message) async {
+    if (_run != null) return;
+    // seq 为 0 的是流式草稿或工具卡片，没有落库位置可撤。
+    if (message.seq <= 0) return;
+
+    final ChatSession session = active;
+    clearInterrupted(session.id);
+
+    await _storage.truncateFrom(
+      session.id,
+      fromSeq: message.isUser ? message.seq + 1 : message.seq,
+    );
+    await _reload(session.id);
+    await _generate(session.id, session.model);
+  }
+
+  /// 改掉一条用户消息重发（存储设计 §8，实施 TODO §9-10）。
+  ///
+  /// 从这条消息起整段撤回，再追加改过的新消息——不是就地改那条条目：
+  /// 条目写入即不可变（存储设计 §7.1）。
+  Future<void> editUserMessage(ChatMessage message, String text) async {
+    final String trimmed = text.trim();
+    if (trimmed.isEmpty) return;
+    if (_run != null) return;
+    if (!message.isUser || message.seq <= 0) return;
+
+    final ChatSession session = active;
+    // 改的是第一句话，标题跟着改：标题本来就是从它取的（功能协议 §2.1）。
+    final bool isFirst =
+        session.messages.isNotEmpty && session.messages.first.id == message.id;
+
+    await _storage.truncateFrom(session.id, fromSeq: message.seq);
+    await _askWithUserMessage(session, trimmed, isFirst: isFirst);
+  }
+
+  /// 落一条用户消息，然后请模型回复。
+  ///
+  /// 用户消息**先落库**再考虑能不能发请求：没配 key 的时候把用户刚打的字
+  /// 丢掉是最糟的处理方式，输入框那边已经清空了。
+  ///
+  /// [isFirst] 时顺带把标题从"新会话"改成用户第一句话（功能协议 §2.1）。
+  Future<void> _askWithUserMessage(
+    ChatSession session,
+    String text, {
+    required bool isFirst,
+  }) async {
     // 用户又发话了，"上次被中断"这条提示就过期了。
     clearInterrupted(session.id);
 
@@ -260,13 +308,13 @@ class SessionStore extends ChangeNotifier {
         id: Ulid.generate(),
         type: EntryType.message,
         role: EntryRole.user,
-        payload: <String, Object?>{'text': trimmed},
+        payload: <String, Object?>{'text': text},
       ),
-      preview: trimmed,
+      preview: text,
     );
 
     if (isFirst) {
-      await _storage.renameSession(session.id, _titleFrom(trimmed));
+      await _storage.renameSession(session.id, _titleFrom(text));
     }
 
     await _reload(session.id);
@@ -357,8 +405,9 @@ class SessionStore extends ChangeNotifier {
         systemPrompt: _systemPrompt(sessionId),
         maxOutputTokens: model.maxOutputTokens,
         // o 系列拒收 temperature，靠模型的兼容开关决定发不发（§4.2）。
-        temperature:
-            model.compat.supportsTemperature ? _settings.temperature : null,
+        temperature: model.compat.supportsTemperature
+            ? _settings.temperature
+            : null,
       ),
     );
 
@@ -380,7 +429,6 @@ class SessionStore extends ChangeNotifier {
     }
 
     if (result.notice != null) _notice = result.notice;
-    _lastUsage = runner.usage;
     await _storage.finishRun(runId, result.outcome);
     await _reload(sessionId);
   }
@@ -400,9 +448,9 @@ class SessionStore extends ChangeNotifier {
 
   /// 把存储里的历史条目翻成请求用的消息列表。
   ///
-  /// 从 `base_seq` 起读（压缩之后只发摘要以后的部分），并丢掉 error /
-  /// aborted 的轮次——半句话和没有结果的调用留在上下文里只会误导模型
-  /// （§6-14）。
+  /// 从 `base_seq` 起读（压缩之后只发摘要以后的部分），跳过被 `truncate`
+  /// 标记撤回的区间（编辑重发，存储设计 §8），并丢掉 error / aborted 的
+  /// 轮次——半句话和没有结果的调用留在上下文里只会误导模型（§6-14）。
   ///
   /// **工具结果不回放**。落库是为了崩溃恢复和界面显示（存储设计 §6.1），
   /// 但要把它们放回请求里，得连同产生它们的那条 assistant 消息的
@@ -410,7 +458,9 @@ class SessionStore extends ChangeNotifier {
   /// `tool_use` 的原始块现在没有落库。这一条留给 M3：那时要做缓存前缀，
   /// 本来就得把 assistant 的 parts 完整存下来。
   Future<List<ai.ChatMessageModel>> _readHistory(String sessionId) async {
-    final List<EntryRecord> entries = await _storage.readContext(sessionId);
+    final List<EntryRecord> entries = applyTruncations(
+      await _storage.readContext(sessionId),
+    );
     final List<ai.ChatMessageModel> history = <ai.ChatMessageModel>[];
 
     for (final EntryRecord entry in entries) {
@@ -445,7 +495,9 @@ class SessionStore extends ChangeNotifier {
   /// 违反"条目写入即不可变"（存储设计 §7.1）。落库由 `TurnRunner` 按
   /// 各自的时机做。
   void _paintDraft(String sessionId, TurnDraft draft) {
-    final int index = _sessions.indexWhere((ChatSession s) => s.id == sessionId);
+    final int index = _sessions.indexWhere(
+      (ChatSession s) => s.id == sessionId,
+    );
     if (index < 0) return;
 
     final ChatSession session = _sessions[index];
@@ -454,6 +506,7 @@ class SessionStore extends ChangeNotifier {
       role: ChatRole.assistant,
       time: _timeLabel(DateTime.now()),
       tools: draft.tools,
+      rawText: draft.text,
       blocks: _blocksOf(
         text: draft.text,
         thinking: draft.thinking,
@@ -491,9 +544,16 @@ class SessionStore extends ChangeNotifier {
     );
     final ChatSession updated = _toChatSession(record, entries);
 
-    final int index = _sessions.indexWhere((ChatSession s) => s.id == sessionId);
+    // 扫描工作区文件并合并到会话里。
+    final String workspacePath = _workspaces.pathFor(sessionId);
+    final List<WorkspaceFile> files = await scanWorkspaceDirectory(workspacePath);
+    final ChatSession withFiles = updated.copyWith(files: files);
+
+    final int index = _sessions.indexWhere(
+      (ChatSession s) => s.id == sessionId,
+    );
     if (index < 0) return;
-    _sessions = List<ChatSession>.of(_sessions)..[index] = updated;
+    _sessions = List<ChatSession>.of(_sessions)..[index] = withFiles;
     notifyListeners();
   }
 
@@ -506,7 +566,10 @@ class SessionStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  static Future<List<ChatSession>> _loadAll(WepStorage storage) async {
+  static Future<List<ChatSession>> _loadAll(
+    WepStorage storage,
+    WorkspaceRoots workspaces,
+  ) async {
     final List<SessionSummary> summaries = await storage.listSessions();
     final List<ChatSession> result = <ChatSession>[];
 
@@ -517,7 +580,12 @@ class SessionStore extends ChangeNotifier {
         summary.id,
         limit: _kTailLimit,
       );
-      result.add(_toChatSession(record, entries));
+      final ChatSession session = _toChatSession(record, entries);
+
+      // 加载工作区文件。
+      final String workspacePath = workspaces.pathFor(summary.id);
+      final List<WorkspaceFile> files = await scanWorkspaceDirectory(workspacePath);
+      result.add(session.copyWith(files: files));
     }
     return result;
   }
@@ -536,12 +604,16 @@ class SessionStore extends ChangeNotifier {
       // 拿这个键去设置里查，查不到就显示键本身——用户删掉了那个模型，
       // 会话还在，这时显示原始键比显示空白有用。
       model: record.modelId,
+      // 文件列表由 _reload 单独加载并合并，这里先留空。
       files: const <WorkspaceFile>[],
       messages: _toChatMessages(entries),
     );
   }
 
   /// 条目列表 → 气泡列表。
+  ///
+  /// 先跳过被 `truncate` 标记撤回的区间：撤回过的消息不该还留在屏幕上
+  /// （存储设计 §8）。
   ///
   /// 工具结果不占独立气泡，而是挂到**紧邻的下一条助手消息**上：那条消息
   /// 就是模型看完工具结果之后说的话，两者属于同一个动作。没有后继助手
@@ -551,7 +623,7 @@ class SessionStore extends ChangeNotifier {
     final List<ChatMessage> out = <ChatMessage>[];
     final List<ToolCall> pending = <ToolCall>[];
 
-    for (final EntryRecord entry in entries) {
+    for (final EntryRecord entry in applyTruncations(entries)) {
       if (entry.type != EntryType.message) continue;
 
       if (entry.role == EntryRole.toolResult) {
@@ -613,7 +685,8 @@ class SessionStore extends ChangeNotifier {
       meta: rawArgs is Map<String, Object?>
           ? summarizeToolArguments(rawArgs)
           : null,
-      detail: '$prefix${firstLine.length <= 120 ? firstLine : '${firstLine.substring(0, 120)}…'}',
+      detail:
+          '$prefix${firstLine.length <= 120 ? firstLine : '${firstLine.substring(0, 120)}…'}',
       status: outcome == 'ok' ? ToolStatus.done : ToolStatus.failed,
     );
   }
@@ -621,21 +694,46 @@ class SessionStore extends ChangeNotifier {
   static ChatMessage _toChatMessage(EntryRecord entry) {
     final bool isUser = entry.role == EntryRole.user;
     final String text = entry.payload['text'] as String? ?? '';
+    final int? elapsedMs = entry.payload['elapsedMs'] as int?;
 
     return ChatMessage(
       id: entry.id,
       role: isUser ? ChatRole.user : ChatRole.assistant,
       time: _timeLabel(entry.createdAt),
+      seq: entry.seq,
+      // 原始文本原样留一份：复制和编辑要的是 Markdown 源码，从 blocks
+      // 反推回去是有损的。
+      rawText: text,
+      usage: isUser ? null : _usageOf(entry),
+      elapsed: elapsedMs == null ? null : Duration(milliseconds: elapsedMs),
       // 用户消息不解析 Markdown：用户打的 `-` 开头是破折号，不是列表。
       blocks: isUser
           ? (text.isEmpty
-              ? const <ContentBlock>[]
-              : <ContentBlock>[ParagraphBlock(text)])
+                ? const <ContentBlock>[]
+                : <ContentBlock>[ParagraphBlock(text)])
           : _blocksOf(
               text: text,
               thinking: entry.payload['thinking'] as String? ?? '',
               error: entry.payload['error'] as String?,
             ),
+    );
+  }
+
+  /// 落库的用量 → 操作栏用量。
+  ///
+  /// 存储层的字段全是 nullable（不是模型响应的条目就全空），展示层不区分
+  /// "没有"和"是 0"，一律折成 0。思考 token 没有独立列，在 payload 里
+  /// （见 `TurnRunner._persistAssistant`）。
+  static MessageUsage? _usageOf(EntryRecord entry) {
+    final TokenUsage usage = entry.usage;
+    final int reasoning = entry.payload['reasoningTokens'] as int? ?? 0;
+    if (usage.isEmpty && reasoning == 0) return null;
+    return MessageUsage(
+      inputTokens: usage.inputTokens ?? 0,
+      outputTokens: usage.outputTokens ?? 0,
+      cacheReadTokens: usage.cacheReadTokens ?? 0,
+      cacheWriteTokens: usage.cacheWriteTokens ?? 0,
+      reasoningTokens: reasoning,
     );
   }
 
@@ -671,9 +769,7 @@ class SessionStore extends ChangeNotifier {
   static String _groupLabel(DateTime updatedAt) {
     final DateTime now = DateTime.now();
     final int days = DateTime(now.year, now.month, now.day)
-        .difference(
-          DateTime(updatedAt.year, updatedAt.month, updatedAt.day),
-        )
+        .difference(DateTime(updatedAt.year, updatedAt.month, updatedAt.day))
         .inDays;
     if (days <= 0) return '今天';
     if (days == 1) return '昨天';

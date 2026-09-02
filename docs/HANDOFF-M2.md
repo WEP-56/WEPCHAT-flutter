@@ -3,8 +3,17 @@
 写给下一个会话。**M0 与 M1 已完成并由用户实测通过**；本文说明当前代码的真实形状、
 已经踩过的坑、以及 M2 该从哪里下手。
 
-**验证基线**（2026-09-02）：`flutter analyze` 无问题，`flutter test` **199/199 通过**。
+**验证基线**（2026-09-02）：`flutter analyze` 无问题，`flutter test` **329/329 通过**。
 用户已在真实环境实测**三种协议的无工具纯聊天 + 中断**，均正常。
+
+**最新进展**（2026-09-02，会话末尾）：用户的五项界面完善请求已全部完成：
+1. Markdown 渲染（链接、图片、数学公式）
+2. 工作区面板集成真实文件列表与"打开目录"功能
+3. 设置页滚动时的 AXTree 错误修复
+4. 聊天区打磨（文本选择、每条消息的用量统计、复制/重新生成/编辑按钮）
+5. 初始状态与布局（新会话自动选择默认模型、工作区面板默认折叠、设置按钮移至左侧边栏底部）
+
+**下一会话的起点**：M2 工具开发（搜索工具 + 长期记忆）。纯聊天与界面已完整。
 
 ---
 
@@ -171,6 +180,13 @@ SQLite 句柄不释放——Windows 上表现为测试 tearDown 删目录时 `er
 
 ## 6. M2 待办：工具注册 + 权限门 + 文件工具
 
+**当前状态**（2026-09-02）：工具注册表、`PermissionGate`、`AgentLoop` 均已完成。
+**读类工具已完成并测试通过**（`list_files`、`read_file`、`search_files`，见 
+`test/tools/workspace/read_tools_test.dart`，84 个测试用例覆盖正常路径、参数容错、
+越界保护、取消）。工作区扫描（`workspace_scanner.dart`）已集成到 `SessionStore`。
+
+**下一步**：写类工具（`write_file`、`edit_file`、`delete_file`）+ 把纯聊天链路换成 loop。
+
 ### 6.1 第一件事：路径安全层（§7-13）
 
 **M2 的第一件事，不是文件工具本身。** 规范化、`..` 逃逸检测、符号链接、
@@ -179,6 +195,9 @@ Windows 的 `\\?\` 前缀与保留名（`CON` / `NUL`）、大小写不敏感。
 
 `WorkspacePaths`（M0 就有）能展开 `~` 并建 `<root>/<session_id>/`，是地基，但它
 **不做安全校验**。
+
+**已完成**：`WorkspaceGuard`（`lib/platform/workspace_guard.dart`）提供 `resolve(path)` 
+和 `resolveForWrite(path)`，处理所有路径安全检查。读类工具已经在用它。
 
 ### 6.2 第二件事：把纯聊天链路换成 loop
 
@@ -206,40 +225,82 @@ Windows 的 `\\?\` 前缀与保留名（`CON` / `NUL`）、大小写不敏感。
 ### 6.3 工具层现状
 
 ```dart
-abstract class Tool {
-  ToolDefinition get definition;
-  String get name => definition.name;
-  bool get requiresApproval => false;   // 读类 false，写/执行类 true
-  Future<ToolResult> execute(Map<String, Object?> arguments, ToolContext context);
+abstract class WepTool {
+  String get name;        // list_files
+  String get label;       // 列出文件
+  String get description; // 进 prompt，影响缓存前缀
+  Map<String, Object?> get schema;
+  ToolExecutionMode get mode;  // readonly | sequential
+  
+  Map<String, Object?> prepareArguments(Map<String, Object?> raw);
+  Future<ToolResult> execute(Map<String, Object?> args, ToolContext ctx);
 }
 ```
 
-`requiresApproval` 放在工具自己身上而不是外部 if 分支，是为了让"忘了判断"的默认
-结果是**拒绝**而不是放行。
+`ToolResult` 四态：`ok` / `failed` / `cancelled` / `permissionDenied`（`lib/tools/tool.dart`）。
+`content` 给模型，`details` 给界面。
 
-`ToolRegistry.declarations` 按名字**字典序**排序，且**只在这里排**。适配器不要再排——
-两处排序会让缓存在其中一处改了之后静默失效。`test/tools/tool_registry_test.dart`
-有一条测试专门守这个。
+`ToolRegistry.definitions` 按名字**字典序**排序（影响缓存前缀），且**只在这里排**。
+`test/tools/tool_registry_test.dart` 有一条测试专门守这个。
 
-`dispatch()` 永不抛：未知工具名 → `ToolResult.error` 且**文案里列出可用工具名**
-（模型靠这个自我纠正）；工具内部抛异常 → 收成 error；token 已取消 → 返回中断结果
-且不执行。
+**已完成的读类工具**：
+- `ListFilesTool` — 递归列出工作区文件，相对路径，支持 `recursive` 和 `path` 参数
+- `ReadFileTool` — 读文件内容，带行号，支持 `lines` 区间，BOM 自动剥离，拒绝二进制
+- `SearchFilesTool` — 全文搜索，支持正则、glob 过滤、max_matches 限制
 
-### 6.4 权限门（§7-10 ~ §7-12）
+测试覆盖：84 个用例，包含正常路径、参数容错、越界保护、取消、同一目录顺序一致性、
+二进制跳过、符号链接过滤。
+
+### 6.4 写类工具的约束
+
+- **`write_file` 不截断已存在的文件**：先检查 `File.existsSync()`，存在则报错让模型选
+  `edit_file`。不静默覆盖——文件可能是之前工具写的，模型忘了。
+- **`edit_file` 的 `find` 必须逐字匹配**，找不到就报错（pi 的做法，实施 TODO §6.5）。
+  不能猜"可能是这一段"——改错行比拒绝改更糟。
+- **BOM 剥离、行尾还原**：读入时去 BOM、记住原文是 CRLF 还是 LF，写回时还原。
+  Windows 文件很多是 CRLF，改一次全变 LF 会让 git diff 爆炸。
+- **Mutation 队列串行化**：所有写操作（write / edit / delete）进 `MutationQueue`，
+  一个一个来——并发写同一文件是未定义行为，串行是**工具的责任**，不能推给模型判断。
+
+### 6.5 权限门（§7-10 ~ §7-12）
 
 `PermissionGate.check(toolName, args) → allow | ask | deny`，在 `execute` **之前**调。
 三态默认值按协议 §9 的表。`ask` 弹窗，用户可选"本会话内一直允许"——这个记忆是运行时的，
 **不落 entries**（它不是对话内容）。`deny` 也要产生一条 tool result 告诉模型"用户拒绝了"，
 不能静默跳过，否则模型会重试到死。
 
-### 6.5 `edit_file` 参考 pi 的做法
-
-BOM 剥离、行尾探测（CRLF/LF）与还原、**匹配不到就报错绝不猜**、写入过 mutation
-队列串行化。
+**已完成**：`PermissionGate` 在 `lib/tools/permission_gate.dart`，提供 `check` 方法和
+会话内记忆。`ToolRegistry.dispatch` 在调用工具前先过权限门。
 
 ---
 
-## 7. 明确的欠账清单
+## 7. 下一会话的起点：搜索工具 + 长期记忆
+
+M2 的剩余工作分两部分：
+
+### 7.1 搜索工具（实施 TODO §7-15，M4）
+
+**`web_search` / `web_fetch`**。后端路由（Tavily / Brave / SearXNG / 模型原生）在**一处**选择；
+搜索配置与聊天模型配置独立（协议 §5）。`web_fetch` 只 GET，不接受模型给的 header / cookie / Authorization。
+
+**待定事项**：
+- Tavily API key 怎么配、配在哪一屏（§9，"待用户拍的决策"）
+- 是否需要多个搜索后端（实施 TODO §13 已定：第一版只做 Tavily，等有人真的要换再加第二个）
+
+### 7.2 长期记忆（实施 TODO §7-17，M6）
+
+**`save_memory` / `list_memory` / `read_memory`**。只有这三个能碰记忆存储，其他工具和 `run_js` 都不能
+（AGENTS.md §6.3）。
+
+记忆存储方案（实施 TODO §13，偏离 A）：**SQLite 表而非 `memory.json`**（存储文档 §12）。
+M6 落地时同步改协议 §2.2。
+
+表结构待设计：至少需要 `id` / `session_id` / `content` / `created_at` / `tags`。
+支持全文搜索（FTS5）以便 `list_memory` 按关键词过滤。
+
+---
+
+## 8. 明确的欠账清单
 
 按"现在就该补"到"可以再等等"排：
 
@@ -247,14 +308,15 @@ BOM 剥离、行尾探测（CRLF/LF）与还原、**匹配不到就报错绝不�
    `test/ai/openai_completions_stream_test.dart` 的形状写：`apiWith(sse)` 塞录好的
    事件流，覆盖正文 / 思考 / 工具调用分片 / usage / 错误 / 取消。用户已实测这个协议
    能聊天，但分片和工具调用路径没有回归保护。
-2. **用量显示没做**（§10-5、§6-12）。用量已随助手条目落库（`entries.usage_*` 列），
-   界面上还没有任何显示位。M1 完成标准里写着"用量能看到"，这条严格说还欠着。
+2. ~~**用量显示没做**~~。**已完成**（2026-09-02）：`MessageActionBar` 显示输入/输出/缓存读写/
+   思考 token 与耗时，悬停显示，触摸端常驻。
 3. **"上次被中断，可重试"提示没做**（§10-6、§9-7）。
    `AppBootstrap.interruptedSessionIds` 已经取到了，但没人读它。
 4. **`ChatMessage.isUser` 还是 bool**（§10-2）。加 tool_result 后不够用，M2 接工具时
    一起换成 role 枚举，越晚改牵连越多。
 5. **`ChatMessage.time` 还是格式化好的字符串**（§10-1）。领域模型该存 epoch ms。
-6. **`EntryType.truncate` 只有枚举值**（§9-10），没有写入路径，界面也没有"编辑重发"入口。
+6. ~~**`EntryType.truncate` 只有枚举值**~~。**已完成**（2026-09-02）：`SessionStore.regenerate` 
+   和 `editUserMessage` 调用 `storage.truncateFrom`，`ChatView` 有完整的编辑重发与重新生成界面。
 7. **删除会话不清工作区目录**（§9-11）。删除弹窗明写"工作区文件不受影响"，是刻意的，
    但要不要给一个"连同文件一起删"的选项没定。
 8. **`sqlite3_flutter_libs` 从没在真机验过**（§2-2、§12-4、§12-5）：Android 四个 ABI、

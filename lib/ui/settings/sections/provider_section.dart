@@ -99,10 +99,8 @@ class _ProviderRow extends StatelessWidget {
                 tooltip: '编辑',
                 size: 15,
                 box: 28,
-                onTap: () => unawaited(showProviderDialog(
-                  context,
-                  existing: config,
-                )),
+                onTap: () =>
+                    unawaited(showProviderDialog(context, existing: config)),
               ),
               // 内置 provider 不给删（删了下次启动还会回来）。
               if (!config.builtin)
@@ -128,10 +126,8 @@ class _ProviderRow extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               TextButton.icon(
-                onPressed: () => unawaited(showModelsDialog(
-                  context,
-                  config.id,
-                )),
+                onPressed: () =>
+                    unawaited(showModelsDialog(context, config.id)),
                 icon: const Icon(Icons.list_alt, size: 15),
                 label: Text(modelCount == 0 ? '添加模型' : '模型 $modelCount'),
               ),

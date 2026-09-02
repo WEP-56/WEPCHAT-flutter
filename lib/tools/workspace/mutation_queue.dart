@@ -29,8 +29,7 @@ class MutationQueue {
   Future<T> run<T>(String workspaceRoot, Future<T> Function() action) {
     final Completer<T> result = Completer<T>();
 
-    final Future<void> previous =
-        _tails[workspaceRoot] ?? Future<void>.value();
+    final Future<void> previous = _tails[workspaceRoot] ?? Future<void>.value();
 
     // 队尾接的是 `result.future` 的"完成与否"，而不是它本身：用
     // `.then` 串会让异常沿着队列一路传下去，把后来者一并毒死。

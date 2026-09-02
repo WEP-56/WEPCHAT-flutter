@@ -217,12 +217,29 @@ class WorkspaceGuard {
 }
 
 /// `< > : " | ? *`。反斜杠和正斜杠不在内——它们是分隔符，由 `p.split` 处理。
-final Set<int> _kIllegalChars = <int>{
-  0x3C, 0x3E, 0x3A, 0x22, 0x7C, 0x3F, 0x2A,
-};
+final Set<int> _kIllegalChars = <int>{0x3C, 0x3E, 0x3A, 0x22, 0x7C, 0x3F, 0x2A};
 
 const Set<String> _kReservedNames = <String>{
-  'CON', 'PRN', 'AUX', 'NUL',
-  'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9',
-  'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9',
+  'CON',
+  'PRN',
+  'AUX',
+  'NUL',
+  'COM1',
+  'COM2',
+  'COM3',
+  'COM4',
+  'COM5',
+  'COM6',
+  'COM7',
+  'COM8',
+  'COM9',
+  'LPT1',
+  'LPT2',
+  'LPT3',
+  'LPT4',
+  'LPT5',
+  'LPT6',
+  'LPT7',
+  'LPT8',
+  'LPT9',
 };

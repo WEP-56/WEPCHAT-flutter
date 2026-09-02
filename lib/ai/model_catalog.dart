@@ -149,10 +149,7 @@ const List<ModelSpec> kSeedModels = <ModelSpec>[
     providerId: 'anthropic',
     contextWindow: 200000,
     maxOutputTokens: 32000,
-    compat: ModelCompat(
-      cache: CacheControlFormat.anthropic,
-      visionInput: true,
-    ),
+    compat: ModelCompat(cache: CacheControlFormat.anthropic, visionInput: true),
   ),
 
   // ---- OpenAI ----
@@ -179,10 +176,7 @@ const List<ModelSpec> kSeedModels = <ModelSpec>[
     providerId: 'openai',
     contextWindow: 1047576,
     maxOutputTokens: 32768,
-    compat: ModelCompat(
-      supportsPromptCacheKey: true,
-      visionInput: true,
-    ),
+    compat: ModelCompat(supportsPromptCacheKey: true, visionInput: true),
   ),
 
   // ---- DeepSeek ----

@@ -14,4 +14,5 @@ export 'models.dart'
         ThinkingLevel,
         TokenUsage;
 export 'session_record.dart' show SessionRecord, SessionSummary;
+export 'truncation.dart' show applyTruncations, kTruncateFromSeq;
 export 'wep_storage.dart' show WepStorage;

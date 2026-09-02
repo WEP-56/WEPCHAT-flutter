@@ -33,7 +33,8 @@ Map<String, Object?> buildCompletionsRequest(ProviderRequest req) {
 
   // 4. max_tokens 的字段名按模型走：o 系列与 gpt-5 只认
   //    max_completion_tokens，传 max_tokens 直接 400（ModelCompat 的注释）。
-  body[compat.maxTokensField] = req.maxOutputTokens ?? req.model.maxOutputTokens;
+  body[compat.maxTokensField] =
+      req.maxOutputTokens ?? req.model.maxOutputTokens;
 
   // 5. temperature —— o 系列拒绝这个字段，必须省略（传 1.0 也不行）
   if (req.temperature != null && compat.supportsTemperature) {
@@ -47,8 +48,9 @@ Map<String, Object?> buildCompletionsRequest(ProviderRequest req) {
   //    截断到 64 字符是 OpenAI 的上限；ULID 是 26 字符，实际不会触发。
   final String? sessionId = req.sessionId;
   if (compat.supportsPromptCacheKey && sessionId != null) {
-    body['prompt_cache_key'] =
-        sessionId.length <= 64 ? sessionId : sessionId.substring(0, 64);
+    body['prompt_cache_key'] = sessionId.length <= 64
+        ? sessionId
+        : sessionId.substring(0, 64);
   }
 
   body['stream'] = true;
@@ -224,7 +226,10 @@ String _encodeArguments(Map<String, Object?> arguments) {
   return arguments.isEmpty ? '{}' : jsonEncode(arguments);
 }
 
-Map<String, Object?> _buildToolMessage(ToolResultPart part, ModelCompat compat) {
+Map<String, Object?> _buildToolMessage(
+  ToolResultPart part,
+  ModelCompat compat,
+) {
   final Map<String, Object?> out = <String, Object?>{
     'role': 'tool',
     'tool_call_id': part.callId,

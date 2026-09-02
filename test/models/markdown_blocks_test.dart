@@ -15,9 +15,7 @@ void main() {
     });
 
     test('连续行合并成一段，空行分段', () {
-      final List<ContentBlock> blocks = parseMarkdownBlocks(
-        '第一行\n第二行\n\n第二段',
-      );
+      final List<ContentBlock> blocks = parseMarkdownBlocks('第一行\n第二行\n\n第二段');
 
       expect(blocks.length, equals(2));
       expect((blocks[0] as ParagraphBlock).text, equals('第一行\n第二行'));
@@ -92,9 +90,7 @@ void main() {
 
   group('列表', () {
     test('- 开头的连续行是一个无序列表', () {
-      final List<ContentBlock> blocks = parseMarkdownBlocks(
-        '- 苹果\n- 香蕉\n- 橘子',
-      );
+      final List<ContentBlock> blocks = parseMarkdownBlocks('- 苹果\n- 香蕉\n- 橘子');
 
       final BulletListBlock list = blocks.single as BulletListBlock;
       expect(list.ordered, isFalse);
@@ -119,9 +115,7 @@ void main() {
     });
 
     test('列表后面接段落，两者分开', () {
-      final List<ContentBlock> blocks = parseMarkdownBlocks(
-        '- 一\n- 二\n\n收尾的话',
-      );
+      final List<ContentBlock> blocks = parseMarkdownBlocks('- 一\n- 二\n\n收尾的话');
 
       expect(blocks.length, equals(2));
       expect(blocks[0], isA<BulletListBlock>());
@@ -131,9 +125,7 @@ void main() {
 
   group('引用', () {
     test('> 开头的连续行合并成一个引用块', () {
-      final List<ContentBlock> blocks = parseMarkdownBlocks(
-        '> 第一行\n> 第二行',
-      );
+      final List<ContentBlock> blocks = parseMarkdownBlocks('> 第一行\n> 第二行');
 
       expect((blocks.single as QuoteBlock).text, equals('第一行\n第二行'));
     });
@@ -168,6 +160,77 @@ void main() {
     });
   });
 
+  group('块级公式', () {
+    test(r'$$ 独立成块，定界符不进内容', () {
+      final List<ContentBlock> blocks = parseMarkdownBlocks(
+        '前面\n\n\$\$\n\\sum_{i=1}^{n} i\n\$\$\n\n后面',
+      );
+
+      expect(blocks.length, equals(3));
+      expect((blocks[1] as MathBlock).latex, equals(r'\sum_{i=1}^{n} i'));
+    });
+
+    test('同一行闭合的公式', () {
+      final List<ContentBlock> blocks = parseMarkdownBlocks(r'$$E = mc^2$$');
+
+      expect((blocks.single as MathBlock).latex, equals('E = mc^2'));
+    });
+
+    test('未闭合的公式当已闭合：流式最后一块必然未闭合', () {
+      final List<ContentBlock> blocks = parseMarkdownBlocks(
+        '\$\$\n\\frac{a}{b}',
+      );
+
+      expect((blocks.single as MathBlock).latex, equals(r'\frac{a}{b}'));
+    });
+
+    test('刚吐出定界符的那一帧不产生空块', () {
+      expect(parseMarkdownBlocks(r'$$'), isEmpty);
+    });
+
+    test(r'段落遇到 $$ 断开，不吃掉公式的打开行', () {
+      final List<ContentBlock> blocks = parseMarkdownBlocks(
+        '块级公式：\n\$\$\nx^2\n\$\$',
+      );
+
+      expect(blocks.length, equals(2));
+      expect(blocks[0], isA<ParagraphBlock>());
+      expect((blocks[1] as MathBlock).latex, equals('x^2'));
+    });
+  });
+
+  group('图片', () {
+    test('独占一行的图片成块', () {
+      final List<ContentBlock> blocks = parseMarkdownBlocks(
+        '![封面](https://example.com/a.png)',
+      );
+
+      final ImageBlock image = blocks.single as ImageBlock;
+      expect(image.src, equals('https://example.com/a.png'));
+      expect(image.alt, equals('封面'));
+    });
+
+    test('图片后面还有文字时留在段落里，交给行内渲染', () {
+      final List<ContentBlock> blocks = parseMarkdownBlocks(
+        '![图](a.png)\n这张图说明了问题',
+      );
+
+      expect(blocks.single, isA<ParagraphBlock>());
+    });
+
+    test('alt 可以为空', () {
+      final List<ContentBlock> blocks = parseMarkdownBlocks('![](a.png)');
+
+      expect((blocks.single as ImageBlock).alt, isEmpty);
+    });
+
+    test('没有 url 的不当图片', () {
+      final List<ContentBlock> blocks = parseMarkdownBlocks('![空]()');
+
+      expect(blocks.single, isA<ParagraphBlock>());
+    });
+  });
+
   test('混合文档：各块按出现顺序排好', () {
     final List<ContentBlock> blocks = parseMarkdownBlocks('''
 ## 结论
@@ -186,15 +249,16 @@ final x = 1;
 > 注意兼容性。
 ''');
 
-    expect(blocks.map((ContentBlock b) => b.runtimeType).toList(), equals(
-      <Type>[
+    expect(
+      blocks.map((ContentBlock b) => b.runtimeType).toList(),
+      equals(<Type>[
         HeadingBlock,
         ParagraphBlock,
         BulletListBlock,
         ParagraphBlock,
         CodeBlock,
         QuoteBlock,
-      ],
-    ));
+      ]),
+    );
   });
 }

@@ -17,10 +17,10 @@ class _FakeTool extends Tool {
 
   @override
   ToolDefinition get definition => ToolDefinition(
-        name: 'fake_$_permissionId',
-        description: '测试用',
-        schema: const <String, Object?>{'type': 'object'},
-      );
+    name: 'fake_$_permissionId',
+    description: '测试用',
+    schema: const <String, Object?>{'type': 'object'},
+  );
 
   @override
   String get permissionId => _permissionId;
@@ -29,8 +29,7 @@ class _FakeTool extends Tool {
   Future<ToolResult> execute(
     Map<String, Object?> arguments,
     ToolContext context,
-  ) async =>
-      ToolResult.ok('ran');
+  ) async => ToolResult.ok('ran');
 }
 
 void main() {
@@ -94,7 +93,8 @@ void main() {
       // write_file 的默认档位是「询问」。
       final PermissionGate gate = PermissionGate(
         settings: settings,
-        prompt: (PermissionRequest _) async => const PermissionAnswer.allowOnce(),
+        prompt: (PermissionRequest _) async =>
+            const PermissionAnswer.allowOnce(),
       );
 
       expect((await authorize(gate, writeTool)).allowed, isTrue);
@@ -193,7 +193,8 @@ void main() {
     test('会话被删时授权一并清掉', () async {
       final PermissionGate gate = PermissionGate(
         settings: settings,
-        prompt: (PermissionRequest _) async => const PermissionAnswer.allowAlways(),
+        prompt: (PermissionRequest _) async =>
+            const PermissionAnswer.allowAlways(),
       );
 
       await authorize(gate, writeTool);
@@ -206,7 +207,8 @@ void main() {
     test('设置改成禁止后，会话内的旧授权不再生效', () async {
       final PermissionGate gate = PermissionGate(
         settings: settings,
-        prompt: (PermissionRequest _) async => const PermissionAnswer.allowAlways(),
+        prompt: (PermissionRequest _) async =>
+            const PermissionAnswer.allowAlways(),
       );
 
       await authorize(gate, writeTool);
@@ -236,7 +238,10 @@ void main() {
     );
 
     // 用户确认的是"这次这些参数"，只给工具名等于让人盲签。
-    expect(seen, equals(<String, Object?>{'path': 'a.txt', 'content': 'secret'}));
+    expect(
+      seen,
+      equals(<String, Object?>{'path': 'a.txt', 'content': 'secret'}),
+    );
     expect(seenTool, equals('fake_write_file'));
   });
 }

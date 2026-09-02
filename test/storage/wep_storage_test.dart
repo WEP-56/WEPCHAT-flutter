@@ -308,8 +308,9 @@ void main() {
       expect(updated.modelId, equals('gpt-4'));
 
       // 验证 *_change 条目存在
-      final List<EntryRecord> changes =
-          await storage.readStateChanges(session.id);
+      final List<EntryRecord> changes = await storage.readStateChanges(
+        session.id,
+      );
       expect(changes.length, equals(1));
       expect(changes[0].type, equals(EntryType.modelChange));
       expect(changes[0].payload['providerId'], equals('openai'));
@@ -327,8 +328,9 @@ void main() {
       final SessionRecord? updated = await storage.findSession(session.id);
       expect(updated!.thinking, equals(ThinkingLevel.high));
 
-      final List<EntryRecord> changes =
-          await storage.readStateChanges(session.id);
+      final List<EntryRecord> changes = await storage.readStateChanges(
+        session.id,
+      );
       expect(changes.length, equals(1));
       expect(changes[0].type, equals(EntryType.thinkingChange));
       expect(changes[0].payload['thinking'], equals('high'));
@@ -392,8 +394,8 @@ void main() {
       );
       addTearDown(() async => storage3.close());
 
-      final List<String> interrupted =
-          await storage3.reconcileInterruptedRuns();
+      final List<String> interrupted = await storage3
+          .reconcileInterruptedRuns();
       expect(interrupted, contains(s.id));
     });
   });

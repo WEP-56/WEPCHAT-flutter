@@ -22,7 +22,7 @@ class ExpandedShell extends StatefulWidget {
 }
 
 class _ExpandedShellState extends State<ExpandedShell> {
-  static const double _kRailWidth = 48;
+  static const double _kRailWidth = 42;
   static const double _kLeftMin = 200;
   static const double _kLeftMax = 360;
   static const double _kRightMin = 220;
@@ -77,6 +77,13 @@ class _ExpandedShellState extends State<ExpandedShell> {
                       model: context.settings.defaultModelKey,
                     ),
                   ),
+                  const Spacer(),
+                  IconAction(
+                    icon: Icons.settings_outlined,
+                    tooltip: '设置',
+                    onTap: () => Navigator.of(context).pushNamed('/settings'),
+                  ),
+                  const SizedBox(height: 8),
                 ],
               ),
             if (widget.controller.leftOpen)
@@ -145,14 +152,16 @@ class _Rail extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.only(top: 10),
           child: Column(
-            children: children
-                .map(
-                  (Widget child) => Padding(
+            children: <Widget>[
+              for (final Widget child in children)
+                if (child is Spacer)
+                  child
+                else
+                  Padding(
                     padding: const EdgeInsets.only(bottom: 4),
                     child: child,
                   ),
-                )
-                .toList(),
+            ],
           ),
         ),
       ),

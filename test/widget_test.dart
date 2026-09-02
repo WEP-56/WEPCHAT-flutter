@@ -74,7 +74,7 @@ void main() {
     final AppBootstrap bootstrap = await pumpApp(tester);
 
     expect(find.text('WePChat'), findsOneWidget);
-    expect(find.text('工作区'), findsOneWidget);
+    // 工作区面板现在默认收起，不会显示"工作区"文本
     expect(find.text('给 WePChat 发消息…'), findsOneWidget);
 
     await disposeApp(tester, bootstrap);

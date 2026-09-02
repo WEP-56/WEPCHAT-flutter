@@ -19,26 +19,26 @@ class WriteFileTool extends Tool {
 
   @override
   ToolDefinition get definition => const ToolDefinition(
-        name: 'write_file',
-        description:
-            '把完整内容写进工作区里的一个文件，父目录会自动创建。'
-            '适合新建文件或整体重写；只改其中一段请用 edit_file。'
-            '覆盖已有文件会丢掉原内容，覆盖前应先 read_file 确认。',
-        schema: <String, Object?>{
-          'type': 'object',
-          'properties': <String, Object?>{
-            'path': <String, Object?>{
-              'type': 'string',
-              'description': '文件路径，相对工作区根。',
-            },
-            'content': <String, Object?>{
-              'type': 'string',
-              'description': '完整的文件内容。',
-            },
-          },
-          'required': <String>['path', 'content'],
+    name: 'write_file',
+    description:
+        '把完整内容写进工作区里的一个文件，父目录会自动创建。'
+        '适合新建文件或整体重写；只改其中一段请用 edit_file。'
+        '覆盖已有文件会丢掉原内容，覆盖前应先 read_file 确认。',
+    schema: <String, Object?>{
+      'type': 'object',
+      'properties': <String, Object?>{
+        'path': <String, Object?>{
+          'type': 'string',
+          'description': '文件路径，相对工作区根。',
         },
-      );
+        'content': <String, Object?>{
+          'type': 'string',
+          'description': '完整的文件内容。',
+        },
+      },
+      'required': <String>['path', 'content'],
+    },
+  );
 
   @override
   Future<ToolResult> execute(
@@ -54,9 +54,7 @@ class WriteFileTool extends Tool {
     final Object? rawContent = arguments['content'];
     if (rawContent == null) return ToolResult.error('缺少必填参数 content');
     if (rawContent is! String) {
-      return ToolResult.error(
-        '参数 content 必须是字符串，收到 ${rawContent.runtimeType}',
-      );
+      return ToolResult.error('参数 content 必须是字符串，收到 ${rawContent.runtimeType}');
     }
 
     final int bytes = utf8.encode(rawContent).length;

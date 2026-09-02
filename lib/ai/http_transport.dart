@@ -24,12 +24,13 @@ class StreamedBody {
 ///
 /// 适配器接这个 typedef 而不是直接调 [postStreaming]，测试就能塞进一段
 /// 录好的 SSE 响应，不必起 HTTP server、不必联网。生产代码用默认值。
-typedef StreamPoster = Future<StreamedBody> Function({
-  required Uri url,
-  required Map<String, String> headers,
-  required Map<String, Object?> body,
-  required CancellationToken token,
-});
+typedef StreamPoster =
+    Future<StreamedBody> Function({
+      required Uri url,
+      required Map<String, String> headers,
+      required Map<String, Object?> body,
+      required CancellationToken token,
+    });
 
 /// 重试上限。超过就把最后一次的错误交出去。
 const int _kMaxAttempts = 3;
@@ -75,8 +76,10 @@ Future<StreamedBody> postStreaming({
 
       // 只记 method / host / path / status / 耗时。
       // 不记 header、不记 body、不记 key（§4-11、AGENTS.md §2.4）。
-      _log('POST ${url.host}${url.path} → ${response.statusCode} '
-          '(${sw.elapsedMilliseconds}ms)');
+      _log(
+        'POST ${url.host}${url.path} → ${response.statusCode} '
+        '(${sw.elapsedMilliseconds}ms)',
+      );
 
       if (response.statusCode == 200) {
         handedOff = true;

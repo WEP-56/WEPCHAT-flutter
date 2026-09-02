@@ -117,13 +117,13 @@ class ProviderConfig {
   }
 
   Map<String, Object?> toJson() => <String, Object?>{
-        'id': id,
-        'displayName': displayName,
-        'apiKind': apiKind.name,
-        'baseUrl': baseUrl,
-        'apiKey': apiKey,
-        'builtin': builtin,
-      };
+    'id': id,
+    'displayName': displayName,
+    'apiKind': apiKind.name,
+    'baseUrl': baseUrl,
+    'apiKey': apiKey,
+    'builtin': builtin,
+  };
 
   /// 从 JSON 读。id / baseUrl / apiKind 任一缺失就返回 null——
   /// 这三个少一个都发不出请求，补默认值只会让错误推迟到用户点发送。

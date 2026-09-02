@@ -29,7 +29,8 @@ void main() {
     expect(
       check,
       isA<PathAllowed>(),
-      reason: '「$raw」本该被接受，却被拒了：'
+      reason:
+          '「$raw」本该被接受，却被拒了：'
           '${check is PathRejected ? check.reason : ''}',
     );
     return check as PathAllowed;
@@ -37,11 +38,7 @@ void main() {
 
   void rejected(String raw, {bool allowRoot = false, String? because}) {
     final PathCheck check = guard.check(raw, allowRoot: allowRoot);
-    expect(
-      check,
-      isA<PathRejected>(),
-      reason: because ?? '「$raw」本该被拒绝',
-    );
+    expect(check, isA<PathRejected>(), reason: because ?? '「$raw」本该被拒绝');
   }
 
   group('正常路径', () {
@@ -146,8 +143,9 @@ void main() {
 
   group('符号链接', () {
     test('指向工作区外的链接被拒', () {
-      final Directory outside =
-          Directory.systemTemp.createTempSync('wep_outside_');
+      final Directory outside = Directory.systemTemp.createTempSync(
+        'wep_outside_',
+      );
       addTearDown(() {
         if (outside.existsSync()) outside.deleteSync(recursive: true);
       });
@@ -189,7 +187,9 @@ void main() {
   test('根目录自己在链接下面时不误判', () {
     // macOS 的 /tmp 就是指向 /private/tmp 的链接。不先解析根，
     // 区内的路径会被当成越界。
-    final Directory outer = Directory.systemTemp.createTempSync('wep_realroot_');
+    final Directory outer = Directory.systemTemp.createTempSync(
+      'wep_realroot_',
+    );
     addTearDown(() {
       if (outer.existsSync()) outer.deleteSync(recursive: true);
     });

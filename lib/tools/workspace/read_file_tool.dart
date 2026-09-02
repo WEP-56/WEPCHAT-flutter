@@ -19,26 +19,26 @@ class ReadFileTool extends Tool {
 
   @override
   ToolDefinition get definition => const ToolDefinition(
-        name: 'read_file',
-        description:
-            '读取工作区里一个文本文件的内容，返回带行号的正文。'
-            '大文件会被截断，用 lines 指定行范围（如 "1-80"、"120-"）分段读。'
-            '不能读图片、压缩包等二进制文件。',
-        schema: <String, Object?>{
-          'type': 'object',
-          'properties': <String, Object?>{
-            'path': <String, Object?>{
-              'type': 'string',
-              'description': '文件路径，相对工作区根。',
-            },
-            'lines': <String, Object?>{
-              'type': 'string',
-              'description': '可选行范围，如 "1-80"、"120-"、"45"。行号从 1 起。',
-            },
-          },
-          'required': <String>['path'],
+    name: 'read_file',
+    description:
+        '读取工作区里一个文本文件的内容，返回带行号的正文。'
+        '大文件会被截断，用 lines 指定行范围（如 "1-80"、"120-"）分段读。'
+        '不能读图片、压缩包等二进制文件。',
+    schema: <String, Object?>{
+      'type': 'object',
+      'properties': <String, Object?>{
+        'path': <String, Object?>{
+          'type': 'string',
+          'description': '文件路径，相对工作区根。',
         },
-      );
+        'lines': <String, Object?>{
+          'type': 'string',
+          'description': '可选行范围，如 "1-80"、"120-"、"45"。行号从 1 起。',
+        },
+      },
+      'required': <String>['path'],
+    },
+  );
 
   @override
   Future<ToolResult> execute(
@@ -72,24 +72,22 @@ class ReadFileTool extends Tool {
     }
 
     if (looksBinary(bytes)) {
-      return ToolResult.error(
-        '${target.relative} 看起来是二进制文件，这个工具只读文本。',
-      );
+      return ToolResult.error('${target.relative} 看起来是二进制文件，这个工具只读文本。');
     }
 
     final String text;
     try {
       text = utf8.decode(stripBom(bytes));
     } on FormatException {
-      return ToolResult.error(
-        '${target.relative} 不是有效的 UTF-8 文本，无法读取。',
-      );
+      return ToolResult.error('${target.relative} 不是有效的 UTF-8 文本，无法读取。');
     }
 
     if (context.token.isCancelled) return ToolResult.cancelled();
 
     final List<String> lines = const LineSplitter().convert(text);
-    final _Range? window = range == null ? null : _Range.parse(range, lines.length);
+    final _Range? window = range == null
+        ? null
+        : _Range.parse(range, lines.length);
     if (range != null && window == null) {
       return ToolResult.error('lines 格式不对：$range。用 "1-80"、"120-" 或 "45"。');
     }

@@ -30,6 +30,9 @@ dependencies:
   #         都已满足（§3-2 要求取消能一路传到 HTTP 层）。
   #         不引 SSE 封装包——解析器自己写（§4-4），第三方类型不进领域层。
   http: ^1.2.2
+  url_launcher: ^6.3.2
+  file_selector: ^1.1.0
+  flutter_math_fork: ^0.7.4
 
 dev_dependencies:
   flutter_test:

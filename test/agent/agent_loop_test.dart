@@ -78,10 +78,10 @@ class _CountingTool extends Tool {
 
   @override
   ToolDefinition get definition => const ToolDefinition(
-        name: 'count',
-        description: '计数',
-        schema: <String, Object?>{'type': 'object'},
-      );
+    name: 'count',
+    description: '计数',
+    schema: <String, Object?>{'type': 'object'},
+  );
 
   @override
   Future<ToolResult> execute(
@@ -103,11 +103,11 @@ void main() {
   );
 
   AgentConfig configWith({int maxIterations = 20}) => AgentConfig(
-        model: model,
-        sessionId: 'session-1',
-        workspace: WorkspaceGuard('/tmp/ws'),
-        maxIterations: maxIterations,
-      );
+    model: model,
+    sessionId: 'session-1',
+    workspace: WorkspaceGuard('/tmp/ws'),
+    maxIterations: maxIterations,
+  );
 
   ChatMessageModel assistantText(String text, {TokenUsage? usage}) {
     return ChatMessageModel(
@@ -150,8 +150,9 @@ void main() {
         config: configWith(),
       );
 
-      final List<AgentEvent> events =
-          await loop.run(userHistory, CancellationToken.none).toList();
+      final List<AgentEvent> events = await loop
+          .run(userHistory, CancellationToken.none)
+          .toList();
 
       expect(api.requests.length, equals(1));
       expect(events.whereType<AgentTurnStart>().length, equals(1));
@@ -189,8 +190,9 @@ void main() {
         config: configWith(),
       );
 
-      final List<AgentEvent> events =
-          await loop.run(userHistory, CancellationToken.none).toList();
+      final List<AgentEvent> events = await loop
+          .run(userHistory, CancellationToken.none)
+          .toList();
 
       expect(api.requests.length, equals(2));
 
@@ -203,8 +205,9 @@ void main() {
       expect(second.length, equals(3));
       expect(second[2].role, equals(MessageRole.tool));
 
-      final ToolResultPart part =
-          second[2].parts.whereType<ToolResultPart>().single;
+      final ToolResultPart part = second[2].parts
+          .whereType<ToolResultPart>()
+          .single;
       expect(part.callId, equals('call-1'));
       expect(part.content, equals('Echo: hi'));
       expect(part.isError, isFalse);
@@ -243,7 +246,10 @@ void main() {
           .whereType<ToolResultPart>()
           .toList();
       expect(parts.length, equals(2));
-      expect(parts.map((ToolResultPart p) => p.callId), equals(<String>['a', 'b']));
+      expect(
+        parts.map((ToolResultPart p) => p.callId),
+        equals(<String>['a', 'b']),
+      );
     });
 
     test('未知工具名不中断 loop，错误回传给模型', () async {
@@ -348,8 +354,10 @@ void main() {
       ).run(userHistory, source.token).toList();
 
       expect(api.requests, isEmpty);
-      expect((events.single as AgentDone).stopReason,
-          equals(StopReason.aborted));
+      expect(
+        (events.single as AgentDone).stopReason,
+        equals(StopReason.aborted),
+      );
     });
 
     test('适配器不产生 StreamDone 时当错误收场，不继续循环', () async {
@@ -368,11 +376,9 @@ void main() {
   group('用量累计', () {
     test('多轮用量相加', () async {
       final _ScriptedApi api = _ScriptedApi(<ChatMessageModel>[
-        assistantToolCall(
-          'echo',
-          <String, Object?>{'message': 'x'},
-          usage: const TokenUsage(inputTokens: 100, outputTokens: 20),
-        ),
+        assistantToolCall('echo', <String, Object?>{
+          'message': 'x',
+        }, usage: const TokenUsage(inputTokens: 100, outputTokens: 20)),
         assistantText(
           '好了',
           usage: const TokenUsage(inputTokens: 150, outputTokens: 30),
@@ -416,8 +422,10 @@ void main() {
 
       final List<ChatMessageModel> sent = api.requests.single.messages;
       expect(sent.length, equals(2));
-      expect(sent.every((ChatMessageModel m) => m.stopReason != StopReason.error),
-          isTrue);
+      expect(
+        sent.every((ChatMessageModel m) => m.stopReason != StopReason.error),
+        isTrue,
+      );
     });
   });
 }

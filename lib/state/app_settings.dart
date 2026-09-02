@@ -31,27 +31,28 @@ class AppSettings extends ChangeNotifier {
     required double temperature,
     required String searchBackendId,
     required String workspaceRoot,
-  })  : _store = store,
-        _providers = providers,
-        _models = models,
-        _permissions = permissions,
-        _defaultModelKey = defaultModelKey,
-        _imageGenModelKey = imageGenModelKey,
-        _imageEditModelKey = imageEditModelKey,
-        _themeMode = themeMode,
-        _accent = accent,
-        _memoryMode = memoryMode,
-        _temperature = temperature,
-        _searchBackendId = searchBackendId,
-        _workspaceRoot = workspaceRoot;
+  }) : _store = store,
+       _providers = providers,
+       _models = models,
+       _permissions = permissions,
+       _defaultModelKey = defaultModelKey,
+       _imageGenModelKey = imageGenModelKey,
+       _imageEditModelKey = imageEditModelKey,
+       _themeMode = themeMode,
+       _accent = accent,
+       _memoryMode = memoryMode,
+       _temperature = temperature,
+       _searchBackendId = searchBackendId,
+       _workspaceRoot = workspaceRoot;
 
   /// 从磁盘读。文件不存在时用默认值（首次启动）。
   ///
   /// [store] 传 null 得到一个纯内存实例，给 widget 测试用——不落盘就不会
   /// 在测试之间互相污染，也不会在 fake-async 区里挂住真实 IO。
   static AppSettings load(SettingsStore? store) {
-    final Map<String, Object?> json =
-        store == null ? const <String, Object?>{} : store.read();
+    final Map<String, Object?> json = store == null
+        ? const <String, Object?>{}
+        : store.read();
 
     return AppSettings._(
       store: store,
@@ -453,12 +454,13 @@ class AppSettings extends ChangeNotifier {
     final int index = _models.indexWhere((ModelSpec m) => m.key == key);
     if (index < 0) throw ArgumentError.value(key, 'key', '没有这个模型');
 
-    _models = <ModelSpec>[..._models]..[index] = _models[index].copyWith(
-          displayName: displayName?.trim(),
-          contextWindow: contextWindow,
-          maxOutputTokens: maxOutputTokens,
-          compat: compat,
-        );
+    _models = <ModelSpec>[..._models]
+      ..[index] = _models[index].copyWith(
+        displayName: displayName?.trim(),
+        contextWindow: contextWindow,
+        maxOutputTokens: maxOutputTokens,
+        compat: compat,
+      );
     _changed();
   }
 
@@ -514,26 +516,26 @@ class AppSettings extends ChangeNotifier {
   }
 
   Map<String, Object?> toJson() => <String, Object?>{
-        'providers': <Map<String, Object?>>[
-          for (final ProviderConfig p in _providers) p.toJson(),
-        ],
-        'models': <Map<String, Object?>>[
-          for (final ModelSpec m in _models) m.toJson(),
-        ],
-        'defaultModelKey': _defaultModelKey,
-        'imageGenModelKey': _imageGenModelKey,
-        'imageEditModelKey': _imageEditModelKey,
-        'temperature': _temperature,
-        'permissions': <String, String>{
-          for (final MapEntry<String, ToolPermission> e in _permissions.entries)
-            e.key: e.value.name,
-        },
-        'memoryMode': _memoryMode.name,
-        'searchBackendId': _searchBackendId,
-        'workspaceRoot': _workspaceRoot,
-        'themeMode': _themeMode.name,
-        'accent': _accent.name,
-      };
+    'providers': <Map<String, Object?>>[
+      for (final ProviderConfig p in _providers) p.toJson(),
+    ],
+    'models': <Map<String, Object?>>[
+      for (final ModelSpec m in _models) m.toJson(),
+    ],
+    'defaultModelKey': _defaultModelKey,
+    'imageGenModelKey': _imageGenModelKey,
+    'imageEditModelKey': _imageEditModelKey,
+    'temperature': _temperature,
+    'permissions': <String, String>{
+      for (final MapEntry<String, ToolPermission> e in _permissions.entries)
+        e.key: e.value.name,
+    },
+    'memoryMode': _memoryMode.name,
+    'searchBackendId': _searchBackendId,
+    'workspaceRoot': _workspaceRoot,
+    'themeMode': _themeMode.name,
+    'accent': _accent.name,
+  };
 
   @override
   void dispose() {

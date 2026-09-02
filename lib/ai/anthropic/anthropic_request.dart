@@ -99,8 +99,7 @@ List<Map<String, Object?>> _buildTools(ProviderRequest req) {
 /// system(1) + tools(1) + 最后一条 user(1) = 3 个，在四个上限内。
 List<Map<String, Object?>> _buildMessages(ProviderRequest req) {
   final List<Map<String, Object?>> out = <Map<String, Object?>>[];
-  final bool useCache =
-      req.model.compat.cache == CacheControlFormat.anthropic;
+  final bool useCache = req.model.compat.cache == CacheControlFormat.anthropic;
 
   final int lastUserIndex = _lastIndexWhere(
     req.messages,
@@ -124,10 +123,7 @@ List<Map<String, Object?>> _buildMessages(ProviderRequest req) {
 
     if (markCache) breakpoints++;
 
-    out.add(<String, Object?>{
-      'role': _roleName(msg.role),
-      'content': blocks,
-    });
+    out.add(<String, Object?>{'role': _roleName(msg.role), 'content': blocks});
   }
 
   return out;
@@ -146,10 +142,7 @@ List<Map<String, Object?>> _buildBlocks(
         if (text.isEmpty) break;
         blocks.add(<String, Object?>{'type': 'text', 'text': text});
 
-      case ThinkingPart(
-          :final String text,
-          :final String? signature,
-        ):
+      case ThinkingPart(:final String text, :final String? signature):
         // signature 必须原样带回，改一个字节就报错（§4-9）。
         // 没有 signature 的 thinking 块不能回传——那是别家模型产出的，
         // 由 transformMessages 在上游丢掉，这里再兜一层。
@@ -161,10 +154,10 @@ List<Map<String, Object?>> _buildBlocks(
         });
 
       case ToolCallPart(
-          :final String id,
-          :final String name,
-          :final Map<String, Object?> arguments,
-        ):
+        :final String id,
+        :final String name,
+        :final Map<String, Object?> arguments,
+      ):
         blocks.add(<String, Object?>{
           'type': 'tool_use',
           'id': id,
@@ -173,10 +166,10 @@ List<Map<String, Object?>> _buildBlocks(
         });
 
       case ToolResultPart(
-          :final String callId,
-          :final String content,
-          :final bool isError,
-        ):
+        :final String callId,
+        :final String content,
+        :final bool isError,
+      ):
         // tool_result 是 user 消息里的 block，不是独立角色（§4-9）。
         final Map<String, Object?> block = <String, Object?>{
           'type': 'tool_result',

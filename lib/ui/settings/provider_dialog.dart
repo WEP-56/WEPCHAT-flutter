@@ -196,8 +196,8 @@ class _ProviderDialogState extends State<_ProviderDialog> {
       _urlError = url.isEmpty
           ? '填上端点地址'
           : (url.startsWith('http://') || url.startsWith('https://'))
-              ? null
-              : '要以 http:// 或 https:// 开头';
+          ? null
+          : '要以 http:// 或 https:// 开头';
     });
     if (_nameError != null || _urlError != null) return;
 

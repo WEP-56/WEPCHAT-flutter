@@ -32,14 +32,15 @@ const ModelSpec _thinkingModel = ModelSpec(
 OpenAiCompletionsApi apiWith(String sse, {int chunkSize = 16}) {
   return OpenAiCompletionsApi(
     apiKey: 'test-key',
-    poster: ({
-      required Uri url,
-      required Map<String, String> headers,
-      required Map<String, Object?> body,
-      required CancellationToken token,
-    }) async {
-      return StreamedBody(statusCode: 200, stream: _chunks(sse, chunkSize));
-    },
+    poster:
+        ({
+          required Uri url,
+          required Map<String, String> headers,
+          required Map<String, Object?> body,
+          required CancellationToken token,
+        }) async {
+          return StreamedBody(statusCode: 200, stream: _chunks(sse, chunkSize));
+        },
   );
 }
 
@@ -51,9 +52,9 @@ Stream<List<int>> _chunks(String text, int size) async* {
 }
 
 ProviderRequest _req([ModelSpec model = _model]) => ProviderRequest(
-      model: model,
-      messages: <ChatMessageModel>[ChatMessageModel.user('Hi')],
-    );
+  model: model,
+  messages: <ChatMessageModel>[ChatMessageModel.user('Hi')],
+);
 
 Future<List<StreamEvent>> collect(
   OpenAiCompletionsApi api, [
@@ -98,8 +99,9 @@ data: [DONE]
 
 ''';
       final List<StreamEvent> events = await collect(apiWith(sse));
-      final List<StreamTextDelta> deltas =
-          events.whereType<StreamTextDelta>().toList();
+      final List<StreamTextDelta> deltas = events
+          .whereType<StreamTextDelta>()
+          .toList();
 
       expect(deltas.length, equals(2));
       expect(deltas[0].delta, equals('一'));
@@ -149,8 +151,10 @@ data: {"choices":[{"delta":{"content":"答案是 4"}}]}
 data: [DONE]
 
 ''';
-      final List<StreamEvent> events =
-          await collect(apiWith(sse), _req(_thinkingModel));
+      final List<StreamEvent> events = await collect(
+        apiWith(sse),
+        _req(_thinkingModel),
+      );
       final StreamDone done = events.last as StreamDone;
 
       expect(done.message.thinkingText, equals('先想想'));
@@ -165,8 +169,10 @@ data: {"choices":[{"delta":{"reasoning":"换了个字段名"}}]}
 data: [DONE]
 
 ''';
-      final List<StreamEvent> events =
-          await collect(apiWith(sse), _req(_thinkingModel));
+      final List<StreamEvent> events = await collect(
+        apiWith(sse),
+        _req(_thinkingModel),
+      );
 
       expect(
         (events.last as StreamDone).message.thinkingText,
@@ -209,7 +215,10 @@ data: [DONE]
       expect(calls.single.id, equals('call_1'));
       expect(calls.single.name, equals('read_file'));
       // 中途 parse 一定失败，收全了才是合法 JSON（§4-7）。
-      expect(calls.single.arguments, equals(<String, Object?>{'path': 'a.txt'}));
+      expect(
+        calls.single.arguments,
+        equals(<String, Object?>{'path': 'a.txt'}),
+      );
     });
 
     test('两个并行调用按 index 分开，不互相污染', () async {
@@ -323,8 +332,9 @@ data: [DONE]
       final CancellationTokenSource source = CancellationTokenSource();
       final List<StreamEvent> events = <StreamEvent>[];
 
-      await for (final StreamEvent e
-          in apiWith(sse).stream(_req(), source.token)) {
+      await for (final StreamEvent e in apiWith(
+        sse,
+      ).stream(_req(), source.token)) {
         events.add(e);
         if (e is StreamTextDelta && e.message.text == '一') source.cancel();
       }

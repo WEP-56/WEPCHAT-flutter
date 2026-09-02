@@ -5,6 +5,7 @@ import 'isolate_protocol.dart';
 import 'models.dart';
 import 'session_record.dart';
 import 'storage_isolate.dart';
+import 'truncation.dart';
 
 /// 存储层的唯一公开入口。
 ///
@@ -136,6 +137,22 @@ class WepStorage {
   Future<List<EntryRecord>> readStateChanges(String sessionId) {
     return _isolate.send<List<EntryRecord>>(
       (int id) => ReadDerivedStateRequest(id, sessionId),
+    );
+  }
+
+  /// 编辑重发：追加一条 `truncate` 标记，撤回 `seq >= fromSeq` 的区间
+  /// （存储设计 §8，实施 TODO §9-10）。
+  ///
+  /// 不删旧条目、不回退 `head_seq`——追加式日志里唯一允许的写法。读取侧用
+  /// `applyTruncations` 跳过被撤回的区间。
+  Future<int> truncateFrom(String sessionId, {required int fromSeq}) {
+    return appendEntry(
+      sessionId,
+      NewEntry(
+        id: Ulid.generate(),
+        type: EntryType.truncate,
+        payload: <String, Object?>{kTruncateFromSeq: fromSeq},
+      ),
     );
   }
 

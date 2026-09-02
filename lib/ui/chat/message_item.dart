@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/chat.dart';
@@ -6,15 +7,18 @@ import '../../theme/palette.dart';
 import '../blocks/blocks_view.dart';
 import '../widgets/file_visuals.dart';
 import 'artifact_cards.dart';
+import 'message_action_bar.dart';
 import 'tool_row.dart';
 import 'typing_dots.dart';
 
 /// 单条消息。用户消息是右侧气泡，助手消息是左侧全宽内容流。
-class MessageItemView extends StatelessWidget {
+class MessageItemView extends StatefulWidget {
   const MessageItemView({
     super.key,
     required this.message,
     required this.gallery,
+    this.onRegenerate,
+    this.onEdit,
   });
 
   final ChatMessage message;
@@ -22,9 +26,44 @@ class MessageItemView extends StatelessWidget {
   /// 当前会话的图片列表，供图片查看器切换。
   final List<String> gallery;
 
+  /// 重发 / 编辑重发。为 null 时对应按钮不出现——生成中、流式草稿、
+  /// 助手消息的「编辑」都是这种情况。
+  final VoidCallback? onRegenerate;
+  final VoidCallback? onEdit;
+
+  @override
+  State<MessageItemView> createState() => _MessageItemViewState();
+}
+
+class _MessageItemViewState extends State<MessageItemView> {
+  /// 鼠标停在这条消息上。操作栏平时透明：每条消息底下常驻一行按钮会把
+  /// 对话切得很碎，而悬停范围取整条消息（不只是那一行）才找得到。
+  bool _hovered = false;
+
+  ChatMessage get message => widget.message;
+  List<String> get gallery => widget.gallery;
+
   @override
   Widget build(BuildContext context) {
-    return message.isUser ? _buildUser(context) : _buildAssistant(context);
+    return MouseRegion(
+      onEnter: (PointerEnterEvent _) => setState(() => _hovered = true),
+      onExit: (PointerExitEvent _) => setState(() => _hovered = false),
+      child: message.isUser ? _buildUser(context) : _buildAssistant(context),
+    );
+  }
+
+  /// 消息底部的用量与操作。
+  ///
+  /// 流式草稿不挂（在 `_buildAssistant` 里挡掉）：它还没落库，`seq` 是 0，
+  /// 撤回没有落点，复制也只能复制到半句话。
+  Widget _actionBar({required bool alignEnd}) {
+    return MessageActionBar(
+      message: message,
+      alignEnd: alignEnd,
+      hovered: _hovered,
+      onRegenerate: widget.onRegenerate,
+      onEdit: widget.onEdit,
+    );
   }
 
   Widget _buildUser(BuildContext context) {
@@ -63,6 +102,7 @@ class MessageItemView extends StatelessWidget {
             ),
           ),
         ),
+        _actionBar(alignEnd: true),
       ],
     );
   }
@@ -115,6 +155,11 @@ class MessageItemView extends StatelessWidget {
           ),
         ),
       );
+    }
+    // 只有工具卡片的那条不带操作栏：它不是模型说的话，没有可复制的正文，
+    // 也没有自己的 `seq` 可撤回（见 `SessionStore._toolOnlyMessage`）。
+    if (message.role == ChatRole.assistant && !message.isStreaming) {
+      children.add(_actionBar(alignEnd: false));
     }
 
     return Column(

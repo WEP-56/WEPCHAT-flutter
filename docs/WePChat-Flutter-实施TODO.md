@@ -297,7 +297,7 @@ abstract class WepTool {
 - [x] 9-7 `runs` 表 + 启动时扫 `finished_at IS NULL` 标为中断。
 - [ ] 9-8 助手消息在 `message_end` 落盘；**工具结果每个执行完立刻落盘**（存储文档 §6.1，理由是副作用已发生）。助手侧已做（`SessionStore._persistAssistant`，流结束时一次写入）；**工具结果那半条等 M2 有工具了再做**。
 - [x] 9-9 派生状态（模型 / 思考档位 / 工具集）回放实现；与 `sessions` 表缓存列不一致时报错，不静默用缓存（`../AGENTS.md` §1.3）。
-- [ ] 9-10 truncate 条目支持编辑重发（存储文档 §8）。**未做**：`EntryType.truncate` 只有枚举值，没有写入路径，界面也还没有"编辑重发"入口。
+- [x] 9-10 truncate 条目支持编辑重发（存储文档 §8）。`SessionStore.regenerate` 和 `editUserMessage` 调用 `storage.truncateFrom`，读取侧用 `applyTruncations` 过滤被撤回区间。
 - [ ] 9-11 删除会话：软删 → 删 `blob_refs` → 清工作区目录（要确认用户意图，协议里工作区文件是用户产物）→ 硬删行。前三步里的删库部分已做；**工作区目录当前刻意不删**（删除弹窗明写"工作区文件不受影响"），要不要给一个"连同文件一起删"的选项待定。
 - [x] 9-12 M0 结束时把 `lib/state/session_store.dart` 从内存 mock 切到真存储，**界面不改一行**。这是 M0 的验收标准。
 

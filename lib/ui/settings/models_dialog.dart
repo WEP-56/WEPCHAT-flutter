@@ -67,8 +67,9 @@ class _ModelsDialogState extends State<_ModelsDialog> {
         // 继续显示一个不存在的 provider 的模型只会让人以为还在。
         if (config == null) return const SizedBox.shrink();
 
-        final List<ModelSpec> models =
-            settings.modelsOfProvider(widget.providerId);
+        final List<ModelSpec> models = settings.modelsOfProvider(
+          widget.providerId,
+        );
 
         return AlertDialog(
           title: Text(
@@ -218,10 +219,8 @@ class _ModelsDialogState extends State<_ModelsDialog> {
 
       final List<String>? picked = await showDialog<List<String>>(
         context: context,
-        builder: (BuildContext ctx) => _PickModelsDialog(
-          ids: ids,
-          already: already,
-        ),
+        builder: (BuildContext ctx) =>
+            _PickModelsDialog(ids: ids, already: already),
       );
       if (picked == null || picked.isEmpty || !mounted) return;
 
@@ -462,12 +461,12 @@ class _PickModelsDialogState extends State<_PickModelsDialog> {
                     onChanged: exists
                         ? null
                         : (bool? on) => setState(() {
-                              if (on ?? false) {
-                                _picked.add(id);
-                              } else {
-                                _picked.remove(id);
-                              }
-                            }),
+                            if (on ?? false) {
+                              _picked.add(id);
+                            } else {
+                              _picked.remove(id);
+                            }
+                          }),
                     title: Text(
                       id,
                       style: AppFonts.mono(

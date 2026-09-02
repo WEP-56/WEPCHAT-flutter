@@ -12,11 +12,11 @@ import 'package:wepchat/tools/tool.dart';
 /// （符号链接、BOM、行尾、权限），换成假的等于测了另一个东西。
 class ToolHarness {
   ToolHarness._(this._temp, this._outside)
-      : context = ToolContext(
-          sessionId: 'session-test',
-          workspace: WorkspaceGuard(_temp.path),
-          token: CancellationToken.none,
-        );
+    : context = ToolContext(
+        sessionId: 'session-test',
+        workspace: WorkspaceGuard(_temp.path),
+        token: CancellationToken.none,
+      );
 
   factory ToolHarness.create() {
     return ToolHarness._(

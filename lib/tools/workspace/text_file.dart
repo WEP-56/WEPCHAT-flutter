@@ -37,8 +37,9 @@ class TextFileShape {
   /// 还原而不是统一成 `\n`：改一行不该顺手把整个文件的行尾换掉——那会让
   /// 版本控制显示"整个文件都变了"，也可能弄坏依赖 CRLF 的下游工具。
   List<int> encode(String text) {
-    final String restored =
-        newline == '\n' ? text : text.replaceAll('\n', newline);
+    final String restored = newline == '\n'
+        ? text
+        : text.replaceAll('\n', newline);
     final List<int> body = utf8.encode(restored);
     return hadBom ? <int>[..._kUtf8Bom, ...body] : body;
   }

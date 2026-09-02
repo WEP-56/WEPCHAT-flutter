@@ -55,9 +55,9 @@ class AgentLoop {
     required ProviderApi api,
     required ToolRegistry tools,
     required AgentConfig config,
-  })  : _api = api,
-        _tools = tools,
-        _config = config;
+  }) : _api = api,
+       _tools = tools,
+       _config = config;
 
   final ProviderApi _api;
   final ToolRegistry _tools;
@@ -186,9 +186,7 @@ class AgentLoop {
         );
       }
 
-      messages.add(
-        ChatMessageModel(role: MessageRole.tool, parts: results),
-      );
+      messages.add(ChatMessageModel(role: MessageRole.tool, parts: results));
 
       if (token.isCancelled) {
         yield AgentDone(stopReason: StopReason.aborted, usage: total);

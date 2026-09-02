@@ -25,8 +25,10 @@ void main() {
     });
 
     test('~ 被展开成主目录，不会建一个真叫 ~ 的目录', () {
-      final WorkspaceRoots roots =
-          WorkspaceRoots.resolve('~/WePChat/workspaces', fallback: root.path);
+      final WorkspaceRoots roots = WorkspaceRoots.resolve(
+        '~/WePChat/workspaces',
+        fallback: root.path,
+      );
 
       expect(roots.root, isNot(contains('~')));
       expect(p.isAbsolute(roots.root), isTrue);
@@ -34,8 +36,10 @@ void main() {
     });
 
     test('相对路径被转成绝对路径', () {
-      final WorkspaceRoots roots =
-          WorkspaceRoots.resolve('ws/here', fallback: root.path);
+      final WorkspaceRoots roots = WorkspaceRoots.resolve(
+        'ws/here',
+        fallback: root.path,
+      );
 
       expect(p.isAbsolute(roots.root), isTrue);
       expect(p.basename(roots.root), equals('here'));
@@ -68,8 +72,9 @@ void main() {
     });
 
     test('根目录不存在时一并建出来', () {
-      final WorkspaceRoots roots =
-          WorkspaceRoots(p.join(root.path, 'deep', 'nested'));
+      final WorkspaceRoots roots = WorkspaceRoots(
+        p.join(root.path, 'deep', 'nested'),
+      );
       final String path = roots.ensureSession('s2');
 
       expect(Directory(path).existsSync(), isTrue);

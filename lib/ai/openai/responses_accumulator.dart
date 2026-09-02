@@ -168,11 +168,13 @@ class ResponsesAccumulator {
     final List<int> indices = _calls.keys.toList()..sort();
     for (final int i in indices) {
       final _CallState state = _calls[i]!;
-      parts.add(ToolCallPart(
-        id: state.id,
-        name: state.name,
-        arguments: _tryParseArgs(state.arguments.toString()),
-      ));
+      parts.add(
+        ToolCallPart(
+          id: state.id,
+          name: state.name,
+          arguments: _tryParseArgs(state.arguments.toString()),
+        ),
+      );
     }
 
     return parts;

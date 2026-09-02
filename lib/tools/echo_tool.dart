@@ -10,19 +10,16 @@ class EchoTool extends Tool {
 
   @override
   ToolDefinition get definition => const ToolDefinition(
-        name: 'echo',
-        description: '原样返回输入的文本。用于测试工具调用流程。',
-        schema: <String, Object?>{
-          'type': 'object',
-          'properties': <String, Object?>{
-            'message': <String, Object?>{
-              'type': 'string',
-              'description': '要回显的文本',
-            },
-          },
-          'required': <String>['message'],
-        },
-      );
+    name: 'echo',
+    description: '原样返回输入的文本。用于测试工具调用流程。',
+    schema: <String, Object?>{
+      'type': 'object',
+      'properties': <String, Object?>{
+        'message': <String, Object?>{'type': 'string', 'description': '要回显的文本'},
+      },
+      'required': <String>['message'],
+    },
+  );
 
   @override
   Future<ToolResult> execute(

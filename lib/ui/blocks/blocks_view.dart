@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_math_fork/flutter_math.dart';
 
 import '../../models/content.dart';
+import '../../theme/fonts.dart';
 import '../../theme/palette.dart';
+import '../widgets/file_visuals.dart';
 import 'code_block_view.dart';
 import 'inline_text.dart';
 import 'table_block_view.dart';
@@ -66,7 +69,120 @@ class BlockView extends StatelessWidget {
       ),
       final TableBlock block => TableBlockView(block: block),
       final CodeBlock block => CodeBlockView(block: block),
+      MathBlock(:final String latex) => _MathBlockView(latex: latex),
+      ImageBlock(:final String src, :final String? alt) => _ImageBlockView(
+        src: src,
+        alt: alt,
+      ),
     };
+  }
+}
+
+/// 块级公式：居中、可横向滚动。
+///
+/// 长公式在窄屏上会超出宽度，套一层横向滚动而不是缩放——缩到看不清
+/// 还不如让人划一下。
+class _MathBlockView extends StatelessWidget {
+  const _MathBlockView({required this.latex});
+
+  final String latex;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppPalette palette = context.palette;
+    return SizedBox(
+      width: double.infinity,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Math.tex(
+          latex,
+          textStyle: TextStyle(fontSize: 15, color: palette.text1),
+          // 模型偶尔吐出不合法的 LaTeX，显示源码比显示错误框有用。
+          onErrorFallback: (Object _) =>
+              Text(latex, style: AppFonts.mono(size: 12, color: palette.text2)),
+        ),
+      ),
+    );
+  }
+}
+
+/// 独占一行的图片。网络图直接加载，工作区路径读本地文件。
+class _ImageBlockView extends StatelessWidget {
+  const _ImageBlockView({required this.src, this.alt});
+
+  final String src;
+  final String? alt;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppPalette palette = context.palette;
+    final bool remote = src.startsWith('http://') || src.startsWith('https://');
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxHeight: 360),
+        child: remote
+            ? Image.network(
+                src,
+                fit: BoxFit.contain,
+                alignment: Alignment.centerLeft,
+                loadingBuilder:
+                    (
+                      BuildContext context,
+                      Widget child,
+                      ImageChunkEvent? progress,
+                    ) {
+                      if (progress == null) return child;
+                      return _Placeholder(
+                        icon: Icons.downloading_outlined,
+                        text: alt?.isNotEmpty == true ? alt! : '加载中…',
+                        palette: palette,
+                      );
+                    },
+                errorBuilder: (BuildContext _, Object _, StackTrace? _) =>
+                    _Placeholder(
+                      icon: Icons.broken_image_outlined,
+                      text: alt?.isNotEmpty == true ? alt! : '图片加载失败',
+                      palette: palette,
+                    ),
+              )
+            : WorkspaceImage(file: src),
+      ),
+    );
+  }
+}
+
+class _Placeholder extends StatelessWidget {
+  const _Placeholder({
+    required this.icon,
+    required this.text,
+    required this.palette,
+  });
+
+  final IconData icon;
+  final String text;
+  final AppPalette palette;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 90,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: palette.bgRaise,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(icon, size: 16, color: palette.text3),
+          const SizedBox(width: 8),
+          Text(text, style: TextStyle(fontSize: 11.5, color: palette.text3)),
+        ],
+      ),
+    );
   }
 }
 

@@ -21,35 +21,35 @@ class EditFileTool extends Tool {
 
   @override
   ToolDefinition get definition => const ToolDefinition(
-        name: 'edit_file',
-        description:
-            '把文件里的一段文本替换成另一段。调用前先用 read_file 看清原文。'
-            'find 必须和文件里的内容逐字一致（含缩进），匹配不到会报错而不会'
-            '猜测位置。默认要求 find 在文件里只出现一次；确实要改全部时'
-            '把 all 设成 true。',
-        schema: <String, Object?>{
-          'type': 'object',
-          'properties': <String, Object?>{
-            'path': <String, Object?>{
-              'type': 'string',
-              'description': '文件路径，相对工作区根。',
-            },
-            'find': <String, Object?>{
-              'type': 'string',
-              'description': '要被替换的原文，逐字一致。',
-            },
-            'replace': <String, Object?>{
-              'type': 'string',
-              'description': '替换成的新文本。空串表示删掉这一段。',
-            },
-            'all': <String, Object?>{
-              'type': 'boolean',
-              'description': '替换全部出现处，默认 false（只替换唯一的那处）。',
-            },
-          },
-          'required': <String>['path', 'find', 'replace'],
+    name: 'edit_file',
+    description:
+        '把文件里的一段文本替换成另一段。调用前先用 read_file 看清原文。'
+        'find 必须和文件里的内容逐字一致（含缩进），匹配不到会报错而不会'
+        '猜测位置。默认要求 find 在文件里只出现一次；确实要改全部时'
+        '把 all 设成 true。',
+    schema: <String, Object?>{
+      'type': 'object',
+      'properties': <String, Object?>{
+        'path': <String, Object?>{
+          'type': 'string',
+          'description': '文件路径，相对工作区根。',
         },
-      );
+        'find': <String, Object?>{
+          'type': 'string',
+          'description': '要被替换的原文，逐字一致。',
+        },
+        'replace': <String, Object?>{
+          'type': 'string',
+          'description': '替换成的新文本。空串表示删掉这一段。',
+        },
+        'all': <String, Object?>{
+          'type': 'boolean',
+          'description': '替换全部出现处，默认 false（只替换唯一的那处）。',
+        },
+      },
+      'required': <String>['path', 'find', 'replace'],
+    },
+  );
 
   @override
   Future<ToolResult> execute(
@@ -66,9 +66,7 @@ class EditFileTool extends Tool {
     final Object? rawReplace = arguments['replace'];
     if (rawReplace == null) return ToolResult.error('缺少必填参数 replace');
     if (rawReplace is! String) {
-      return ToolResult.error(
-        '参数 replace 必须是字符串，收到 ${rawReplace.runtimeType}',
-      );
+      return ToolResult.error('参数 replace 必须是字符串，收到 ${rawReplace.runtimeType}');
     }
 
     if (find == rawReplace) {
@@ -94,9 +92,7 @@ class EditFileTool extends Tool {
 
     final File file = File(target.absolute);
     if (!file.existsSync()) {
-      return ToolResult.error(
-        '文件不存在：${target.relative}。新建文件请用 write_file。',
-      );
+      return ToolResult.error('文件不存在：${target.relative}。新建文件请用 write_file。');
     }
 
     final TextFileShape shape;

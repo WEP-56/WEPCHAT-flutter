@@ -26,8 +26,7 @@ ToolKind toolKindOf(String name) {
     'read_file' ||
     'write_file' ||
     'edit_file' ||
-    'delete_file' =>
-      ToolKind.file,
+    'delete_file' => ToolKind.file,
     _ => ToolKind.script,
   };
 }
@@ -95,8 +94,9 @@ String _detailOf(ToolResult result) {
     ToolOutcome.denied => '已拒绝：',
   };
   final String firstLine = result.content.split('\n').first.trim();
-  final String brief =
-      firstLine.length <= 120 ? firstLine : '${firstLine.substring(0, 120)}…';
+  final String brief = firstLine.length <= 120
+      ? firstLine
+      : '${firstLine.substring(0, 120)}…';
   return '$prefix$brief';
 }
 

@@ -57,8 +57,9 @@ Map<String, Object?> buildResponsesRequest(ProviderRequest req) {
 
   final String? sessionId = req.sessionId;
   if (compat.supportsPromptCacheKey && sessionId != null) {
-    body['prompt_cache_key'] =
-        sessionId.length <= 64 ? sessionId : sessionId.substring(0, 64);
+    body['prompt_cache_key'] = sessionId.length <= 64
+        ? sessionId
+        : sessionId.substring(0, 64);
   }
 
   // 7. store: false —— 必须显式设（§4-8）。省略等于让服务端留存这次请求，

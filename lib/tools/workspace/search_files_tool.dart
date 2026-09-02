@@ -32,37 +32,37 @@ class SearchFilesTool extends Tool {
 
   @override
   ToolDefinition get definition => const ToolDefinition(
-        name: 'search_files',
-        description:
-            '在会话工作区的文本文件里搜索内容，返回文件路径、行号和命中行。'
-            '只搜文本文件，自动跳过图片、压缩包等二进制文件。',
-        schema: <String, Object?>{
-          'type': 'object',
-          'properties': <String, Object?>{
-            'query': <String, Object?>{
-              'type': 'string',
-              'description': '要搜的文本；use_regex 为 true 时是正则表达式。',
-            },
-            'path': <String, Object?>{
-              'type': 'string',
-              'description': '可选，限定搜索的子目录。留空搜整个工作区。',
-            },
-            'glob': <String, Object?>{
-              'type': 'string',
-              'description': r'可选文件名过滤，如 "*.md"、"**/*.dart"。',
-            },
-            'use_regex': <String, Object?>{
-              'type': 'boolean',
-              'description': '把 query 当正则处理，默认 false。',
-            },
-            'max_matches': <String, Object?>{
-              'type': 'integer',
-              'description': '最多返回多少条命中，默认 50。',
-            },
-          },
-          'required': <String>['query'],
+    name: 'search_files',
+    description:
+        '在会话工作区的文本文件里搜索内容，返回文件路径、行号和命中行。'
+        '只搜文本文件，自动跳过图片、压缩包等二进制文件。',
+    schema: <String, Object?>{
+      'type': 'object',
+      'properties': <String, Object?>{
+        'query': <String, Object?>{
+          'type': 'string',
+          'description': '要搜的文本；use_regex 为 true 时是正则表达式。',
         },
-      );
+        'path': <String, Object?>{
+          'type': 'string',
+          'description': '可选，限定搜索的子目录。留空搜整个工作区。',
+        },
+        'glob': <String, Object?>{
+          'type': 'string',
+          'description': r'可选文件名过滤，如 "*.md"、"**/*.dart"。',
+        },
+        'use_regex': <String, Object?>{
+          'type': 'boolean',
+          'description': '把 query 当正则处理，默认 false。',
+        },
+        'max_matches': <String, Object?>{
+          'type': 'integer',
+          'description': '最多返回多少条命中，默认 50。',
+        },
+      },
+      'required': <String>['query'],
+    },
+  );
 
   @override
   Future<ToolResult> execute(
@@ -101,8 +101,10 @@ class SearchFilesTool extends Tool {
     bool overflowed = false;
 
     try {
-      await for (final FileSystemEntity entity
-          in dir.list(recursive: true, followLinks: false)) {
+      await for (final FileSystemEntity entity in dir.list(
+        recursive: true,
+        followLinks: false,
+      )) {
         if (context.token.isCancelled) return ToolResult.cancelled();
         if (hits.length >= maxMatches) {
           overflowed = true;
@@ -110,13 +112,17 @@ class SearchFilesTool extends Tool {
         }
         if (entity is! File) continue;
 
-        final String rel =
-            p.relative(entity.path, from: context.workspace.root)
-                .replaceAll(r'\', '/');
+        final String rel = p
+            .relative(entity.path, from: context.workspace.root)
+            .replaceAll(r'\', '/');
         if (nameFilter != null && !nameFilter.hasMatch(rel)) continue;
 
-        final List<String>? found =
-            _scan(entity, rel, pattern, maxMatches - hits.length);
+        final List<String>? found = _scan(
+          entity,
+          rel,
+          pattern,
+          maxMatches - hits.length,
+        );
         if (found == null) continue; // 二进制、太大、读不了。
         scanned++;
         hits.addAll(found);
@@ -132,8 +138,7 @@ class SearchFilesTool extends Tool {
       );
     }
 
-    final StringBuffer buf = StringBuffer()
-      ..writeln('找到 ${hits.length} 条命中：');
+    final StringBuffer buf = StringBuffer()..writeln('找到 ${hits.length} 条命中：');
     for (final String hit in hits) {
       buf.writeln(hit);
     }
@@ -182,7 +187,9 @@ class SearchFilesTool extends Tool {
       // 命中行本身可能很长（压缩过的 JS 是一整行）。截短到能看出上下文
       // 即可，要全文模型会去 read_file。
       final String line = lines[i].trim();
-      final String brief = line.length <= 160 ? line : '${line.substring(0, 160)}…';
+      final String brief = line.length <= 160
+          ? line
+          : '${line.substring(0, 160)}…';
       out.add('  $relative:${i + 1}: $brief');
     }
     return out;

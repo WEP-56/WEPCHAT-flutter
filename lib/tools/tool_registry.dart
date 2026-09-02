@@ -30,10 +30,8 @@ const List<Tool> kWorkspaceTools = <Tool>[
 /// 比较函数变了，缓存会静默失效而不报错——静默失效只能靠对账单发现。
 class ToolRegistry {
   ToolRegistry(Iterable<Tool> tools, {PermissionGate? gate})
-      : _gate = gate,
-        _byName = <String, Tool>{
-          for (final Tool t in tools) t.name: t,
-        } {
+    : _gate = gate,
+      _byName = <String, Tool>{for (final Tool t in tools) t.name: t} {
     if (_byName.length != tools.length) {
       final List<String> names = tools.map((Tool t) => t.name).toList()..sort();
       throw StorageError(
@@ -80,9 +78,7 @@ class ToolRegistry {
     final Tool? tool = _byName[name];
     if (tool == null) {
       final List<String> available = _byName.keys.toList()..sort();
-      return ToolResult.error(
-        '没有名为 $name 的工具。可用的工具：${available.join('、')}',
-      );
+      return ToolResult.error('没有名为 $name 的工具。可用的工具：${available.join('、')}');
     }
 
     if (context.token.isCancelled) return ToolResult.cancelled();

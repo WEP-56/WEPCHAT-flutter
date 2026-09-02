@@ -29,14 +29,15 @@ const ModelSpec _model = ModelSpec(
 AnthropicApi apiWith(String sse, {int chunkSize = 16}) {
   return AnthropicApi(
     apiKey: 'test-key',
-    poster: ({
-      required Uri url,
-      required Map<String, String> headers,
-      required Map<String, Object?> body,
-      required CancellationToken token,
-    }) async {
-      return StreamedBody(statusCode: 200, stream: _chunks(sse, chunkSize));
-    },
+    poster:
+        ({
+          required Uri url,
+          required Map<String, String> headers,
+          required Map<String, Object?> body,
+          required CancellationToken token,
+        }) async {
+          return StreamedBody(statusCode: 200, stream: _chunks(sse, chunkSize));
+        },
   );
 }
 
@@ -48,9 +49,9 @@ Stream<List<int>> _chunks(String text, int size) async* {
 }
 
 ProviderRequest get _req => ProviderRequest(
-      model: _model,
-      messages: <ChatMessageModel>[ChatMessageModel.user('Hi')],
-    );
+  model: _model,
+  messages: <ChatMessageModel>[ChatMessageModel.user('Hi')],
+);
 
 void main() {
   group('正文流', () {
@@ -78,8 +79,9 @@ event: message_stop
 data: {"type":"message_stop"}
 
 ''';
-      final List<StreamEvent> events =
-          await apiWith(sse).stream(_req, CancellationToken.none).toList();
+      final List<StreamEvent> events = await apiWith(
+        sse,
+      ).stream(_req, CancellationToken.none).toList();
 
       expect(events.first, isA<StreamStart>());
       expect(events.last, isA<StreamDone>());
@@ -106,11 +108,13 @@ event: content_block_delta
 data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"C"}}
 
 ''';
-      final List<StreamEvent> events =
-          await apiWith(sse).stream(_req, CancellationToken.none).toList();
+      final List<StreamEvent> events = await apiWith(
+        sse,
+      ).stream(_req, CancellationToken.none).toList();
 
-      final List<StreamTextDelta> deltas =
-          events.whereType<StreamTextDelta>().toList();
+      final List<StreamTextDelta> deltas = events
+          .whereType<StreamTextDelta>()
+          .toList();
 
       expect(deltas.length, equals(3));
       // 增量是单字，但 message 是累积的全文（§4-3）
@@ -151,16 +155,18 @@ event: message_delta
 data: {"type":"message_delta","delta":{"stop_reason":"end_turn"}}
 
 ''';
-      final List<StreamEvent> events =
-          await apiWith(sse).stream(_req, CancellationToken.none).toList();
+      final List<StreamEvent> events = await apiWith(
+        sse,
+      ).stream(_req, CancellationToken.none).toList();
 
       final StreamDone done = events.last as StreamDone;
       expect(done.message.thinkingText, equals('让我想想'));
       expect(done.message.text, equals('答案'));
 
       // signature 分片拼起来，且原样保留
-      final ThinkingPart thinking =
-          done.message.parts.whereType<ThinkingPart>().single;
+      final ThinkingPart thinking = done.message.parts
+          .whereType<ThinkingPart>()
+          .single;
       expect(thinking.signature, equals('abcdef'));
       expect(thinking.modelId, equals('claude-sonnet-4-5'));
 
@@ -187,11 +193,13 @@ event: message_delta
 data: {"type":"message_delta","delta":{"stop_reason":"tool_use"}}
 
 ''';
-      final List<StreamEvent> events =
-          await apiWith(sse).stream(_req, CancellationToken.none).toList();
+      final List<StreamEvent> events = await apiWith(
+        sse,
+      ).stream(_req, CancellationToken.none).toList();
 
-      final List<StreamToolCallDelta> deltas =
-          events.whereType<StreamToolCallDelta>().toList();
+      final List<StreamToolCallDelta> deltas = events
+          .whereType<StreamToolCallDelta>()
+          .toList();
       expect(deltas.length, equals(2));
       expect(deltas[0].toolName, equals('read_file'));
       expect(deltas[0].callId, equals('toolu_1'));
@@ -225,10 +233,11 @@ event: message_delta
 data: {"type":"message_delta","delta":{"stop_reason":"tool_use"}}
 
 ''';
-      final StreamDone done = (await apiWith(sse)
-              .stream(_req, CancellationToken.none)
-              .toList())
-          .last as StreamDone;
+      final StreamDone done =
+          (await apiWith(
+                sse,
+              ).stream(_req, CancellationToken.none).toList()).last
+              as StreamDone;
 
       expect(done.message.toolCalls.length, equals(2));
       expect(done.message.toolCalls[0].name, equals('first'));
@@ -238,7 +247,8 @@ data: {"type":"message_delta","delta":{"stop_reason":"tool_use"}}
 
   group('停止原因映射', () {
     Future<StopReason> reasonFor(String raw) async {
-      final String sse = '''
+      final String sse =
+          '''
 event: content_block_start
 data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
 
@@ -249,10 +259,11 @@ event: message_delta
 data: {"type":"message_delta","delta":{"stop_reason":"$raw"}}
 
 ''';
-      final StreamDone done = (await apiWith(sse)
-              .stream(_req, CancellationToken.none)
-              .toList())
-          .last as StreamDone;
+      final StreamDone done =
+          (await apiWith(
+                sse,
+              ).stream(_req, CancellationToken.none).toList()).last
+              as StreamDone;
       return done.stopReason;
     }
 
@@ -282,10 +293,11 @@ event: content_block_delta
 data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{}"}}
 
 ''';
-      final StreamDone done = (await apiWith(noReason)
-              .stream(_req, CancellationToken.none)
-              .toList())
-          .last as StreamDone;
+      final StreamDone done =
+          (await apiWith(
+                noReason,
+              ).stream(_req, CancellationToken.none).toList()).last
+              as StreamDone;
       expect(done.stopReason, equals(StopReason.toolUse));
     });
   });
@@ -300,10 +312,11 @@ event: message_delta
 data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":30}}
 
 ''';
-      final StreamDone done = (await apiWith(sse)
-              .stream(_req, CancellationToken.none)
-              .toList())
-          .last as StreamDone;
+      final StreamDone done =
+          (await apiWith(
+                sse,
+              ).stream(_req, CancellationToken.none).toList()).last
+              as StreamDone;
 
       expect(done.message.usage.cacheReadTokens, equals(1800));
       expect(done.message.usage.cacheWriteTokens, equals(240));
@@ -319,8 +332,9 @@ event: error
 data: {"type":"error","error":{"type":"overloaded_error","message":"服务过载"}}
 
 ''';
-      final List<StreamEvent> events =
-          await apiWith(sse).stream(_req, CancellationToken.none).toList();
+      final List<StreamEvent> events = await apiWith(
+        sse,
+      ).stream(_req, CancellationToken.none).toList();
 
       final StreamDone done = events.last as StreamDone;
       expect(done.isError, isTrue);
@@ -331,19 +345,21 @@ data: {"type":"error","error":{"type":"overloaded_error","message":"服务过载
     test('传输层抛错也变成 StreamDone', () async {
       final AnthropicApi api = AnthropicApi(
         apiKey: 'k',
-        poster: ({
-          required Uri url,
-          required Map<String, String> headers,
-          required Map<String, Object?> body,
-          required CancellationToken token,
-        }) async {
-          throw const ApiError('限流', statusCode: 429);
-        },
+        poster:
+            ({
+              required Uri url,
+              required Map<String, String> headers,
+              required Map<String, Object?> body,
+              required CancellationToken token,
+            }) async {
+              throw const ApiError('限流', statusCode: 429);
+            },
       );
 
       // 关键：不抛异常，失败编码进事件
-      final List<StreamEvent> events =
-          await api.stream(_req, CancellationToken.none).toList();
+      final List<StreamEvent> events = await api
+          .stream(_req, CancellationToken.none)
+          .toList();
 
       expect(events.length, equals(1));
       final StreamDone done = events.single as StreamDone;
@@ -366,10 +382,11 @@ event: message_delta
 data: {"type":"message_delta","delta":{"stop_reason":"end_turn"}}
 
 ''';
-      final StreamDone done = (await apiWith(sse)
-              .stream(_req, CancellationToken.none)
-              .toList())
-          .last as StreamDone;
+      final StreamDone done =
+          (await apiWith(
+                sse,
+              ).stream(_req, CancellationToken.none).toList()).last
+              as StreamDone;
 
       expect(done.stopReason, equals(StopReason.stop));
       expect(done.message.text, equals('ok'));
@@ -380,19 +397,21 @@ data: {"type":"message_delta","delta":{"stop_reason":"end_turn"}}
 
       final AnthropicApi api = AnthropicApi(
         apiKey: 'k',
-        poster: ({
-          required Uri url,
-          required Map<String, String> headers,
-          required Map<String, Object?> body,
-          required CancellationToken token,
-        }) async {
-          throw const CancelledException();
-        },
+        poster:
+            ({
+              required Uri url,
+              required Map<String, String> headers,
+              required Map<String, Object?> body,
+              required CancellationToken token,
+            }) async {
+              throw const CancelledException();
+            },
       );
 
       source.cancel();
-      final List<StreamEvent> events =
-          await api.stream(_req, source.token).toList();
+      final List<StreamEvent> events = await api
+          .stream(_req, source.token)
+          .toList();
 
       final StreamDone done = events.single as StreamDone;
       expect(done.isAborted, isTrue);
@@ -414,8 +433,9 @@ data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text
 
 ''';
       final List<StreamEvent> collected = <StreamEvent>[];
-      await for (final StreamEvent e
-          in apiWith(sse).stream(_req, source.token)) {
+      await for (final StreamEvent e in apiWith(
+        sse,
+      ).stream(_req, source.token)) {
         collected.add(e);
         if (e is StreamTextDelta) source.cancel();
       }
@@ -440,8 +460,9 @@ event: message_delta
 data: {"type":"message_delta","delta":{"stop_reason":"end_turn"}}
 
 ''';
-      final ChatMessageModel message =
-          await apiWith(sse).streamSimple(_req, CancellationToken.none);
+      final ChatMessageModel message = await apiWith(
+        sse,
+      ).streamSimple(_req, CancellationToken.none);
 
       expect(message.text, equals('标题'));
       expect(message.stopReason, equals(StopReason.stop));

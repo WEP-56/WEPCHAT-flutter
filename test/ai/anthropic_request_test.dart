@@ -279,8 +279,8 @@ void main() {
       final List<Object?> messages = body['messages'] as List<Object?>;
 
       final Map<String, Object?> useBlock =
-          ((messages[0] as Map<String, Object?>)['content']
-              as List<Object?>)[0] as Map<String, Object?>;
+          ((messages[0] as Map<String, Object?>)['content'] as List<Object?>)[0]
+              as Map<String, Object?>;
       expect(useBlock['type'], equals('tool_use'));
       expect(useBlock['id'], equals('call_1'));
       expect(useBlock['input'], equals(<String, Object?>{'path': 'a.txt'}));
@@ -303,11 +303,7 @@ void main() {
             const ChatMessageModel(
               role: MessageRole.tool,
               parts: <ContentPart>[
-                ToolResultPart(
-                  callId: 'c1',
-                  name: 't',
-                  content: 'ok',
-                ),
+                ToolResultPart(callId: 'c1', name: 't', content: 'ok'),
                 ToolResultPart(
                   callId: 'c2',
                   name: 't',
@@ -321,10 +317,14 @@ void main() {
       );
 
       final List<Object?> blocks =
-          ((body['messages'] as List<Object?>)[0] as Map<String, Object?>)['content']
+          ((body['messages'] as List<Object?>)[0]
+                  as Map<String, Object?>)['content']
               as List<Object?>;
 
-      expect((blocks[0] as Map<String, Object?>).containsKey('is_error'), isFalse);
+      expect(
+        (blocks[0] as Map<String, Object?>).containsKey('is_error'),
+        isFalse,
+      );
       expect((blocks[1] as Map<String, Object?>)['is_error'], isTrue);
     });
 
@@ -345,7 +345,8 @@ void main() {
       );
 
       final List<Object?> blocks =
-          ((body['messages'] as List<Object?>)[0] as Map<String, Object?>)['content']
+          ((body['messages'] as List<Object?>)[0]
+                  as Map<String, Object?>)['content']
               as List<Object?>;
 
       expect((blocks[0] as Map<String, Object?>)['type'], equals('image'));
@@ -369,7 +370,8 @@ void main() {
       );
 
       final List<Object?> blocks =
-          ((body['messages'] as List<Object?>)[0] as Map<String, Object?>)['content']
+          ((body['messages'] as List<Object?>)[0]
+                  as Map<String, Object?>)['content']
               as List<Object?>;
 
       expect(blocks.length, equals(1));

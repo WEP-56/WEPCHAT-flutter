@@ -24,9 +24,7 @@ ProviderApi createProviderApi({
   required ProviderConfig config,
 }) {
   if (model.providerId != config.id) {
-    throw StateError(
-      '模型 ${model.id} 属于 ${model.providerId}，不是 ${config.id}',
-    );
+    throw StateError('模型 ${model.id} 属于 ${model.providerId}，不是 ${config.id}');
   }
   if (!config.isConfigured) {
     throw AuthError(
@@ -37,16 +35,16 @@ ProviderApi createProviderApi({
 
   return switch (config.apiKind) {
     ApiKind.anthropicMessages => AnthropicApi(
-        apiKey: config.apiKey,
-        baseUrl: config.baseUrl,
-      ),
+      apiKey: config.apiKey,
+      baseUrl: config.baseUrl,
+    ),
     ApiKind.openaiCompletions => OpenAiCompletionsApi(
-        apiKey: config.apiKey,
-        baseUrl: config.baseUrl,
-      ),
+      apiKey: config.apiKey,
+      baseUrl: config.baseUrl,
+    ),
     ApiKind.openaiResponses => OpenAiResponsesApi(
-        apiKey: config.apiKey,
-        baseUrl: config.baseUrl,
-      ),
+      apiKey: config.apiKey,
+      baseUrl: config.baseUrl,
+    ),
   };
 }

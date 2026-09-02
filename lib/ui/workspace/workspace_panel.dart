@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../app/app_nav.dart';
 import '../../models/chat.dart';
 import '../../models/workspace.dart';
+import '../../platform/open_directory.dart';
 import '../../state/app_scope.dart';
 import '../../state/session_store.dart';
 import '../../theme/fonts.dart';
@@ -122,12 +123,6 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
             style: TextStyle(fontSize: 10.5, color: palette.text3),
           ),
           const Spacer(),
-          IconAction(
-            icon: Icons.ios_share,
-            tooltip: '导出',
-            size: 15,
-            onTap: () => showAppToast(context, '导出工作区（预览版未接入文件系统）'),
-          ),
           if (widget.onCollapse != null)
             IconAction(
               icon: widget.collapseIcon ?? Icons.chevron_right,
@@ -205,10 +200,19 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
 
   Widget _buildFooter(BuildContext context) {
     final AppPalette palette = context.palette;
+    final String path = sessionWorkspacePath(
+      context.settings.workspaceRoot,
+      context.sessions.active.id,
+    );
+
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
       child: InkWell(
-        onTap: () => showAppToast(context, '打开目录（预览版未接入文件系统）'),
+        onTap: () async {
+          final bool ok = await openDirectoryInExplorer(path);
+          if (!context.mounted) return;
+          if (!ok) showAppToast(context, '无法打开目录');
+        },
         borderRadius: BorderRadius.circular(8),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
@@ -216,7 +220,7 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
               Icon(
-                Icons.drive_folder_upload_outlined,
+                Icons.folder_open_outlined,
                 size: 15,
                 color: palette.text2,
               ),

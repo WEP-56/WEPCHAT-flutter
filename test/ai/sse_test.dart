@@ -19,8 +19,9 @@ Stream<List<int>> single(String text) async* {
 void main() {
   group('SSE 基础解析', () {
     test('单个事件', () async {
-      final List<SseEvent> events =
-          await parseSse(single('data: hello\n\n')).toList();
+      final List<SseEvent> events = await parseSse(
+        single('data: hello\n\n'),
+      ).toList();
 
       expect(events.length, equals(1));
       expect(events[0].data, equals('hello'));
@@ -32,8 +33,10 @@ void main() {
         single('data: one\n\ndata: two\n\ndata: three\n\n'),
       ).toList();
 
-      expect(events.map((SseEvent e) => e.data).toList(),
-          equals(<String>['one', 'two', 'three']));
+      expect(
+        events.map((SseEvent e) => e.data).toList(),
+        equals(<String>['one', 'two', 'three']),
+      );
     });
 
     test('带 event 字段', () async {
@@ -77,8 +80,9 @@ void main() {
     });
 
     test('只有注释不产生事件', () async {
-      final List<SseEvent> events =
-          await parseSse(single(': ping\n\n: ping\n\n')).toList();
+      final List<SseEvent> events = await parseSse(
+        single(': ping\n\n: ping\n\n'),
+      ).toList();
 
       expect(events, isEmpty);
     });
@@ -88,13 +92,16 @@ void main() {
         single('data: hello\r\n\r\ndata: world\r\n\r\n'),
       ).toList();
 
-      expect(events.map((SseEvent e) => e.data).toList(),
-          equals(<String>['hello', 'world']));
+      expect(
+        events.map((SseEvent e) => e.data).toList(),
+        equals(<String>['hello', 'world']),
+      );
     });
 
     test('冒号后只去掉一个空格', () async {
-      final List<SseEvent> events =
-          await parseSse(single('data:  two spaces\n\n')).toList();
+      final List<SseEvent> events = await parseSse(
+        single('data:  two spaces\n\n'),
+      ).toList();
 
       expect(events[0].data, equals(' two spaces'));
     });
@@ -109,8 +116,9 @@ void main() {
     });
 
     test('只有 event 没有 data 不产生事件', () async {
-      final List<SseEvent> events =
-          await parseSse(single('event: ping\n\ndata: real\n\n')).toList();
+      final List<SseEvent> events = await parseSse(
+        single('event: ping\n\ndata: real\n\n'),
+      ).toList();
 
       expect(events.length, equals(1));
       expect(events[0].data, equals('real'));
@@ -118,8 +126,9 @@ void main() {
     });
 
     test('结尾缺少空行仍产生事件', () async {
-      final List<SseEvent> events =
-          await parseSse(single('data: no trailing newline')).toList();
+      final List<SseEvent> events = await parseSse(
+        single('data: no trailing newline'),
+      ).toList();
 
       expect(events.length, equals(1));
       expect(events[0].data, equals('no trailing newline'));
@@ -141,15 +150,18 @@ void main() {
         chunked('data: hello world\n\ndata: second event\n\n', size: 3),
       ).toList();
 
-      expect(events.map((SseEvent e) => e.data).toList(),
-          equals(<String>['hello world', 'second event']));
+      expect(
+        events.map((SseEvent e) => e.data).toList(),
+        equals(<String>['hello world', 'second event']),
+      );
     });
 
     test('UTF-8 多字节被切在块边界', () async {
       // 中文每字 3 字节，块大小 2 保证一定切断
       const String text = 'data: 你好世界，这是一段中文\n\n';
-      final List<SseEvent> events =
-          await parseSse(chunked(text, size: 2)).toList();
+      final List<SseEvent> events = await parseSse(
+        chunked(text, size: 2),
+      ).toList();
 
       expect(events.length, equals(1));
       expect(events[0].data, equals('你好世界，这是一段中文'));
@@ -161,8 +173,9 @@ void main() {
         utf8.encode('data: a\r'),
         utf8.encode('\n\r\n'),
       ];
-      final List<SseEvent> events =
-          await parseSse(Stream<List<int>>.fromIterable(chunks)).toList();
+      final List<SseEvent> events = await parseSse(
+        Stream<List<int>>.fromIterable(chunks),
+      ).toList();
 
       expect(events.length, equals(1));
       expect(events[0].data, equals('a'));
@@ -197,7 +210,9 @@ event: message_stop
 data: {"type":"message_stop"}
 
 ''';
-      final List<SseEvent> events = await parseSse(chunked(raw, size: 7)).toList();
+      final List<SseEvent> events = await parseSse(
+        chunked(raw, size: 7),
+      ).toList();
 
       expect(events.length, equals(4));
       expect(events[0].event, equals('message_start'));
@@ -214,7 +229,9 @@ data: {"choices":[{"delta":{"content":" world"},"index":0}]}
 data: [DONE]
 
 ''';
-      final List<SseEvent> events = await parseSse(chunked(raw, size: 11)).toList();
+      final List<SseEvent> events = await parseSse(
+        chunked(raw, size: 11),
+      ).toList();
 
       expect(events.length, equals(3));
       expect(events[0].event, isNull);

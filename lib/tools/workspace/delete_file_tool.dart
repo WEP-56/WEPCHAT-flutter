@@ -17,21 +17,21 @@ class DeleteFileTool extends Tool {
 
   @override
   ToolDefinition get definition => const ToolDefinition(
-        name: 'delete_file',
-        description:
-            '删除工作区里的一个文件。删除不可恢复。'
-            '只删单个文件，不删目录——要清空目录请逐个删。',
-        schema: <String, Object?>{
-          'type': 'object',
-          'properties': <String, Object?>{
-            'path': <String, Object?>{
-              'type': 'string',
-              'description': '要删除的文件路径，相对工作区根。',
-            },
-          },
-          'required': <String>['path'],
+    name: 'delete_file',
+    description:
+        '删除工作区里的一个文件。删除不可恢复。'
+        '只删单个文件，不删目录——要清空目录请逐个删。',
+    schema: <String, Object?>{
+      'type': 'object',
+      'properties': <String, Object?>{
+        'path': <String, Object?>{
+          'type': 'string',
+          'description': '要删除的文件路径，相对工作区根。',
         },
-      );
+      },
+      'required': <String>['path'],
+    },
+  );
 
   @override
   Future<ToolResult> execute(
@@ -58,8 +58,10 @@ class DeleteFileTool extends Tool {
 
     // 不跟随链接判断类型：链接本身该被当成"一个文件"删掉，而不是顺着它
     // 去看指向的是不是目录。
-    final FileSystemEntityType type =
-        FileSystemEntity.typeSync(target.absolute, followLinks: false);
+    final FileSystemEntityType type = FileSystemEntity.typeSync(
+      target.absolute,
+      followLinks: false,
+    );
 
     switch (type) {
       case FileSystemEntityType.notFound:
@@ -67,9 +69,7 @@ class DeleteFileTool extends Tool {
         // 如实说"没找到"，不说"已删除"——模型据此判断是不是搞错了路径。
         return ToolResult.error('文件不存在：${target.relative}，没有删除任何东西。');
       case FileSystemEntityType.directory:
-        return ToolResult.error(
-          '${target.relative} 是一个目录，这个工具只删文件。',
-        );
+        return ToolResult.error('${target.relative} 是一个目录，这个工具只删文件。');
       case FileSystemEntityType.file:
       case FileSystemEntityType.link:
       case FileSystemEntityType.pipe:

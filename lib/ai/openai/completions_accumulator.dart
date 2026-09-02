@@ -71,7 +71,8 @@ class CompletionsAccumulator {
     // 会用不同的名字（DeepSeek 官方是 reasoning_content，部分中转站转成
     // reasoning），而这两个键在正文里都不会出现，多查一个没有代价。
     if (compat.thinking != ThinkingFormat.none) {
-      final String chunk = _stringOf(delta['reasoning_content']) ??
+      final String chunk =
+          _stringOf(delta['reasoning_content']) ??
           _stringOf(delta['reasoning']) ??
           '';
       if (chunk.isNotEmpty) {
@@ -99,8 +100,10 @@ class CompletionsAccumulator {
       // index 缺失时按已有数量兜底：少数端点在只有一个 tool call 时不发
       // index。用 length 而不是 0，否则第二个调用会覆盖第一个。
       final int index = (item['index'] as num?)?.toInt() ?? _calls.length;
-      final _ToolCallState state =
-          _calls.putIfAbsent(index, () => _ToolCallState());
+      final _ToolCallState state = _calls.putIfAbsent(
+        index,
+        () => _ToolCallState(),
+      );
 
       // id 只在第一个 delta 出现，后续 delta 里是 null——不能覆盖。
       final String? id = item['id'] as String?;
@@ -168,13 +171,15 @@ class CompletionsAccumulator {
     final List<int> indices = _calls.keys.toList()..sort();
     for (final int i in indices) {
       final _ToolCallState state = _calls[i]!;
-      parts.add(ToolCallPart(
-        id: state.id ?? '',
-        name: state.name ?? '',
-        // 流还没结束时是半个 JSON，parse 失败就先给空参数——收全了
-        // 下一次 snapshot 自然就对了（§4-7）。
-        arguments: _tryParseArgs(state.arguments.toString()),
-      ));
+      parts.add(
+        ToolCallPart(
+          id: state.id ?? '',
+          name: state.name ?? '',
+          // 流还没结束时是半个 JSON，parse 失败就先给空参数——收全了
+          // 下一次 snapshot 自然就对了（§4-7）。
+          arguments: _tryParseArgs(state.arguments.toString()),
+        ),
+      );
     }
 
     return parts;

@@ -126,10 +126,7 @@ class _ModelPicker extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
     if (options.isEmpty) {
-      return Text(
-        '暂无模型',
-        style: TextStyle(fontSize: 12, color: palette.text3),
-      );
+      return Text('暂无模型', style: TextStyle(fontSize: 12, color: palette.text3));
     }
     final List<SegOption<String>> all = <SegOption<String>>[
       if (allowEmpty) const SegOption<String>('', '跟随默认模型'),
