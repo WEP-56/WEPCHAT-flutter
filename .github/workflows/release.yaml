@@ -83,6 +83,26 @@ jobs:
         env:
           _SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS: '1'
 
+      - name: Verify Windows release bundle
+        shell: pwsh
+        run: |
+          $releaseDir = Join-Path $env:GITHUB_WORKSPACE 'build\windows\x64\runner\Release'
+          if (-not (Test-Path -LiteralPath $releaseDir -PathType Container)) {
+            throw "Flutter release bundle was not found: $releaseDir"
+          }
+
+          $executable = Join-Path $releaseDir 'wepchat.exe'
+          if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
+            throw "Flutter release bundle is missing wepchat.exe: $releaseDir"
+          }
+
+          $executableInfo = Get-Item -LiteralPath $executable
+          if ($executableInfo.Length -le 0) {
+            throw "Windows executable is empty: $executable"
+          }
+
+          Write-Host "Windows executable: $($executableInfo.FullName) ($($executableInfo.Length) bytes)"
+
       - name: Install Inno Setup
         run: |
           choco install innosetup -y
@@ -95,7 +115,7 @@ jobs:
           #define MyAppVersion "$version"
           #define MyAppPublisher "WEP-56"
           #define MyAppURL "https://github.com/WEP-56/WEPCHAT-flutter"
-          #define MyAppExeName "wepchat_flutter.exe"
+          #define MyAppExeName "wepchat.exe"
 
           [Setup]
           AppId={{8F9A2B3C-4D5E-6F7A-8B9C-0D1E2F3A4B5C}
@@ -137,6 +157,18 @@ jobs:
       - name: Build installer
         run: |
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer_script.iss
+          if ($LASTEXITCODE -ne 0) {
+            throw "Inno Setup compilation failed with exit code $LASTEXITCODE"
+          }
+
+          $installers = @(Get-ChildItem -LiteralPath installer -Filter '*.exe' -File)
+          if ($installers.Count -eq 0) {
+            throw "Inno Setup did not produce an installer in the installer directory"
+          }
+
+          $installers | ForEach-Object {
+            Write-Host "Windows installer: $($_.FullName) ($($_.Length) bytes)"
+          }
 
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
