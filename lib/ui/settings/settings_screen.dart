@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import '../../app/responsive.dart';
@@ -14,92 +12,81 @@ import 'sections/tools_section.dart';
 import 'sections/workspace_section.dart';
 
 class _SectionSpec {
-  const _SectionSpec(this.id, this.label, this.icon);
-
+  const _SectionSpec(this.id, this.label, this.description, this.icon);
   final String id;
   final String label;
+  final String description;
   final IconData icon;
 }
 
+/// Android 先显示一级分类；桌面保留左侧分类导航，右侧只刷新当前二级页。
 const List<_SectionSpec> _kSections = <_SectionSpec>[
-  _SectionSpec('provider', '模型服务', Icons.hub_outlined),
-  _SectionSpec('model', '生成参数', Icons.tune),
-  _SectionSpec('search', '搜索后端', Icons.travel_explore),
-  _SectionSpec('tools', '工具权限', Icons.security_outlined),
-  _SectionSpec('memory', '记忆', Icons.psychology_alt_outlined),
-  _SectionSpec('appearance', '外观', Icons.palette_outlined),
-  _SectionSpec('workspace', '工作区', Icons.folder_outlined),
-  _SectionSpec('browser', '浏览器', Icons.language_outlined),
+  _SectionSpec('model_service', '模型服务', '提供商、模型与生成参数', Icons.hub_outlined),
+  _SectionSpec('search', '网络搜索', '网页搜索服务与联网能力', Icons.travel_explore),
+  _SectionSpec('tools', '工具权限', '文件、脚本和网络工具的授权', Icons.security_outlined),
+  _SectionSpec('memory', '记忆配置', '管理可跨会话使用的记忆', Icons.psychology_alt_outlined),
+  _SectionSpec('appearance', '外观', '主题、强调色与显示偏好', Icons.palette_outlined),
+  _SectionSpec('storage', '存储', '工作区和本地数据位置', Icons.folder_outlined),
+  _SectionSpec('browser', '浏览器', '内置浏览器与历史记录', Icons.language_outlined),
 ];
 
-/// 设置页。宽屏左侧是分区导航，窄屏是一条竖向长列表。
-class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key, this.initialSectionId});
+String? _canonicalSectionId(String? id) {
+  if (id == null) return null;
+  return switch (id) {
+    'provider' || 'model' => 'model_service',
+    'workspace' => 'storage',
+    _ => id,
+  };
+}
 
-  /// 打开后直接定位到某个分区，取值见 [_kSections] 的 id。
+class SettingsScreen extends StatelessWidget {
+  const SettingsScreen({super.key, this.initialSectionId});
   final String? initialSectionId;
 
   @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
+  Widget build(BuildContext context) {
+    final String? sectionId = _canonicalSectionId(initialSectionId);
+    if (sectionId != null &&
+        _kSections.every((_SectionSpec spec) => spec.id != sectionId)) {
+      throw ArgumentError.value(initialSectionId, 'initialSectionId', '未知设置分区');
+    }
+    return _SettingsScaffold(selectedId: sectionId);
+  }
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
-  final ScrollController _scroll = ScrollController();
-  final Map<String, GlobalKey> _anchors = <String, GlobalKey>{
-    for (final _SectionSpec spec in _kSections) spec.id: GlobalKey(),
-  };
-
-  late String _activeId = widget.initialSectionId ?? _kSections.first.id;
+class _SettingsScaffold extends StatefulWidget {
+  const _SettingsScaffold({required this.selectedId});
+  final String? selectedId;
 
   @override
-  void initState() {
-    super.initState();
-    final String? initial = widget.initialSectionId;
-    if (initial == null) return;
-    if (!_anchors.containsKey(initial)) {
-      throw ArgumentError.value(initial, 'initialSectionId', '未知设置分区');
-    }
-    WidgetsBinding.instance.addPostFrameCallback((Duration _) {
-      _jumpTo(initial, animate: false);
-    });
-  }
+  State<_SettingsScaffold> createState() => _SettingsScaffoldState();
+}
 
-  @override
-  void dispose() {
-    _scroll.dispose();
-    super.dispose();
-  }
+class _SettingsScaffoldState extends State<_SettingsScaffold> {
+  late String? _selectedId = widget.selectedId;
 
-  void _jumpTo(String id, {bool animate = true}) {
-    final BuildContext? anchor = _anchors[id]?.currentContext;
-    if (anchor == null) return;
-    unawaited(
-      Scrollable.ensureVisible(
-        anchor,
-        duration: animate ? const Duration(milliseconds: 240) : Duration.zero,
-        curve: Curves.easeOut,
-        alignment: 0.02,
-      ),
-    );
-  }
+  void _select(String id) => setState(() => _selectedId = id);
 
   @override
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
     final bool compact = isCompact(context);
+    final _SectionSpec? selected = _selectedId == null
+        ? null
+        : _kSections.firstWhere((_SectionSpec spec) => spec.id == _selectedId);
 
     return Scaffold(
-      // 顶栏和左侧导航共用外壳色，内容面在下方用色差和圆角浮起 —— 和
-      // ExpandedShell 是同一套结构，从会话页进设置时外壳看起来是连续的。
       backgroundColor: palette.bgSide,
       appBar: AppBar(
         toolbarHeight: 50,
         backgroundColor: palette.bgSide,
         surfaceTintColor: Colors.transparent,
-        // 内容滚动到顶栏下面时不加高程：M3 默认会叠一层色调，看着像多了条边界。
         scrolledUnderElevation: 0,
+        leading: compact && selected != null
+            ? BackButton(onPressed: () => Navigator.pop(context))
+            : null,
         title: Text(
-          '设置',
+          selected?.label ?? '设置',
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w600,
@@ -108,54 +95,131 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
       body: SafeArea(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            if (!compact) _buildNav(palette),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.only(top: 10),
-                child: ClipRRect(
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(16),
-                    topRight: Radius.circular(16),
+        child: compact
+            ? (selected == null
+                  ? _CategoryList(
+                      onSelected: (String id) {
+                        Navigator.of(context).push<void>(
+                          MaterialPageRoute<void>(
+                            builder: (_) =>
+                                SettingsScreen(initialSectionId: id),
+                          ),
+                        );
+                      },
+                    )
+                  : _DetailContent(sectionId: selected.id))
+            : Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  _DesktopNav(
+                    selectedId: selected?.id ?? _kSections.first.id,
+                    onSelected: _select,
                   ),
-                  child: ColoredBox(
-                    color: palette.bg,
-                    child: _buildContent(compact),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: ClipRRect(
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(16),
+                          topRight: Radius.circular(16),
+                        ),
+                        child: ColoredBox(
+                          color: palette.bg,
+                          child: _DetailContent(
+                            sectionId: selected?.id ?? _kSections.first.id,
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
-            ),
-          ],
-        ),
       ),
     );
   }
+}
 
-  Widget _buildNav(AppPalette palette) {
-    return Container(
+class _CategoryList extends StatelessWidget {
+  const _CategoryList({required this.onSelected});
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppPalette palette = context.palette;
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(12, 16, 12, 24),
+      addSemanticIndexes: false,
+      itemCount: _kSections.length,
+      separatorBuilder: (BuildContext context, int index) =>
+          const SizedBox(height: 8),
+      itemBuilder: (BuildContext context, int index) {
+        final _SectionSpec spec = _kSections[index];
+        return InkWell(
+          onTap: () => onSelected(spec.id),
+          borderRadius: BorderRadius.circular(12),
+          child: Ink(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: palette.bgPanel,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: <Widget>[
+                Icon(spec.icon, color: palette.accent, size: 21),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        spec.label,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: palette.text1,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        spec.description,
+                        style: TextStyle(fontSize: 11.5, color: palette.text3),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_right, color: palette.text3, size: 20),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _DesktopNav extends StatelessWidget {
+  const _DesktopNav({required this.selectedId, required this.onSelected});
+  final String selectedId;
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppPalette palette = context.palette;
+    return SizedBox(
       width: 176,
-      color: palette.bgSide,
       child: ListView(
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-        // 关掉语义索引：跟内容区的理由一样（flutter#182444），导航列表里的按钮也带
-        // tooltip，套上 IndexedSemantics 会让多个 OverlayPortal 锚点被合并，
-        // Windows accessibility bridge 在滚动时报 AXTree 错误。
         addSemanticIndexes: false,
         children: _kSections.map((_SectionSpec spec) {
-          final bool selected = spec.id == _activeId;
+          final bool selected = spec.id == selectedId;
           return Padding(
             padding: const EdgeInsets.only(bottom: 2),
             child: InkWell(
-              onTap: () {
-                setState(() => _activeId = spec.id);
-                _jumpTo(spec.id);
-              },
+              onTap: () => onSelected(spec.id),
               borderRadius: BorderRadius.circular(8),
               hoverColor: palette.hover,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              child: Ink(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
                 decoration: BoxDecoration(
                   color: selected ? palette.active : Colors.transparent,
                   borderRadius: BorderRadius.circular(8),
@@ -170,13 +234,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     const SizedBox(width: 8),
                     Text(
                       spec.label,
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: selected
-                            ? FontWeight.w600
-                            : FontWeight.w500,
-                        color: palette.text1,
-                      ),
+                      style: TextStyle(fontSize: 12.5, color: palette.text1),
                     ),
                   ],
                 ),
@@ -187,52 +245,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
   }
+}
 
-  /// 内容区滚动。
-  ///
-  /// 用 [SingleChildScrollView] 而不是只有一个 child 的 ListView：ListView 会给
-  /// 每个 item 套一层 `IndexedSemantics`，把整页合并成一个语义节点，页内多个
-  /// Tooltip 的 OverlayPortal 锚点也被并进去 —— 上游 flutter#182444 在这种情况下
-  /// 只保留第一个锚点的遍历标识，剩下的悬浮层节点没了父节点，Windows 的
-  /// accessibility bridge 于是在滚动时不停报 `Failed to update ui::AXTree`。
-  /// 这里的分区是一次性全建出来的，本来也不需要懒加载。
-  Widget _buildContent(bool compact) {
+class _DetailContent extends StatelessWidget {
+  const _DetailContent({required this.sectionId});
+  final String sectionId;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool compact = isCompact(context);
     return SingleChildScrollView(
-      controller: _scroll,
       padding: EdgeInsets.symmetric(
         horizontal: compact ? 12 : 20,
         vertical: 16,
       ),
-      // 竖向滚动里高度是无界的，Center 会按内容高度收缩，只负责水平居中。
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 760),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: _kSections.map((_SectionSpec spec) {
-              return Padding(
-                key: _anchors[spec.id],
-                padding: const EdgeInsets.only(bottom: 14),
-                child: _sectionFor(spec.id),
-              );
-            }).toList(),
-          ),
+          child: _sectionFor(sectionId),
         ),
       ),
     );
   }
+}
 
-  Widget _sectionFor(String id) {
-    return switch (id) {
-      'provider' => const ProviderSection(),
-      'model' => const ModelSection(),
-      'search' => const SearchSection(),
-      'tools' => const ToolsSection(),
-      'memory' => const MemorySection(),
-      'appearance' => const AppearanceSection(),
-      'workspace' => const WorkspaceSection(),
-      'browser' => const BrowserSection(),
-      _ => throw ArgumentError.value(id, 'id', '未知设置分区'),
-    };
-  }
+Widget _sectionFor(String id) {
+  return switch (id) {
+    'model_service' => const Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        ProviderSection(),
+        SizedBox(height: 14),
+        ModelSection(),
+      ],
+    ),
+    'search' => const SearchSection(),
+    'tools' => const ToolsSection(),
+    'memory' => const MemorySection(),
+    'appearance' => const AppearanceSection(),
+    'storage' => const WorkspaceSection(),
+    'browser' => const BrowserSection(),
+    _ => throw ArgumentError.value(id, 'id', '未知设置分区'),
+  };
 }

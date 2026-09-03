@@ -258,7 +258,9 @@ Win32Window::MessageHandler(HWND hwnd,
     }
 
     case WM_ACTIVATE:
-      if (child_content_ != nullptr) {
+      // 失焦时不要再次把焦点塞回 Flutter 子窗口，否则点击其他窗口后
+      // runner 仍会反复抢焦点，设置页滚动时尤其明显。
+      if (LOWORD(wparam) != WA_INACTIVE && child_content_ != nullptr) {
         SetFocus(child_content_);
       }
       return 0;

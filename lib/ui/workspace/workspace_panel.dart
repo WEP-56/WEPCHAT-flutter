@@ -11,6 +11,7 @@ import '../../state/session_store.dart';
 import '../../theme/fonts.dart';
 import '../../theme/palette.dart';
 import '../widgets/controls.dart';
+import '../widgets/context_menu_region.dart' as context_menu;
 import '../widgets/file_visuals.dart';
 import '../widgets/segmented_control.dart';
 import '../widgets/toast.dart';
@@ -346,89 +347,120 @@ class _FileRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
-    return InkWell(
-      onTap: file.kind == FileKind.html
-          ? () => AppNav.openHtml(context, file: file.name)
-          : () => AppNav.openFile(context, file: file.name),
-      borderRadius: BorderRadius.circular(8),
-      hoverColor: palette.hover,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-        child: Row(
-          children: <Widget>[
-            FileIconBox(kind: file.kind, size: 26, radius: 6),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    file.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppFonts.mono(size: 11.5, color: palette.text1),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${file.size} · ${file.time}',
-                    style: TextStyle(fontSize: 10, color: palette.text3),
-                  ),
-                ],
+    return context_menu.ContextMenuRegion(
+      actions: <context_menu.ContextAction>[
+        context_menu.ContextAction(
+          label: file.kind == FileKind.html ? '在浏览器中预览' : '预览',
+          icon: Icons.open_in_new,
+          onSelected: () => _openWorkspaceFile(context, file),
+        ),
+        context_menu.ContextAction(
+          label: '导出',
+          icon: Icons.download_outlined,
+          onSelected: () => _exportWorkspaceFile(context, file),
+        ),
+        context_menu.ContextAction(
+          label: '删除',
+          icon: Icons.delete_outline,
+          destructive: true,
+          onSelected: () => _deleteWorkspaceFile(context, file),
+        ),
+      ],
+      child: InkWell(
+        onTap: () => _openWorkspaceFile(context, file),
+        borderRadius: BorderRadius.circular(8),
+        hoverColor: palette.hover,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+          child: Row(
+            children: <Widget>[
+              FileIconBox(kind: file.kind, size: 26, radius: 6),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      file.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppFonts.mono(size: 11.5, color: palette.text1),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${file.size} · ${file.time}',
+                      style: TextStyle(fontSize: 10, color: palette.text3),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            IconButton(
-              tooltip: '导出',
-              icon: const Icon(Icons.download_outlined, size: 17),
-              onPressed: () => _export(context),
-            ),
-            IconButton(
-              tooltip: '删除',
-              icon: const Icon(Icons.delete_outline, size: 17),
-              onPressed: () => _delete(context),
-            ),
-          ],
+              IconButton(
+                tooltip: '导出',
+                icon: const Icon(Icons.download_outlined, size: 17),
+                onPressed: () => _exportWorkspaceFile(context, file),
+              ),
+              IconButton(
+                tooltip: '删除',
+                icon: const Icon(Icons.delete_outline, size: 17),
+                onPressed: () => _deleteWorkspaceFile(context, file),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
+}
 
-  Future<void> _export(BuildContext context) async {
-    final SessionStore store = context.sessions;
-    final String root = store.workspacePathFor(store.active.id);
-    final bool ok = await WorkspaceFileService(root).export(file.name);
-    if (context.mounted) {
-      showAppToast(context, ok ? '已导出 ${file.name}' : '导出已取消或失败');
-    }
+void _openWorkspaceFile(BuildContext context, WorkspaceFile file) {
+  if (file.kind == FileKind.html) {
+    AppNav.openHtml(context, file: file.name);
+  } else {
+    AppNav.openFile(context, file: file.name);
   }
+}
 
-  Future<void> _delete(BuildContext context) async {
-    final bool? confirmed = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext ctx) => AlertDialog(
-        title: const Text('删除文件？'),
-        content: Text(file.name),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    if (!context.mounted) return;
-    final SessionStore store = context.sessions;
-    final String root = store.workspacePathFor(store.active.id);
-    final bool ok = await WorkspaceFileService(root).delete(file.name);
-    if (!context.mounted) return;
-    await store.refreshWorkspace();
-    if (context.mounted) {
-      showAppToast(context, ok ? '已删除 ${file.name}' : '删除失败');
-    }
+Future<void> _exportWorkspaceFile(
+  BuildContext context,
+  WorkspaceFile file,
+) async {
+  final SessionStore store = context.sessions;
+  final String root = store.workspacePathFor(store.active.id);
+  final bool ok = await WorkspaceFileService(root).export(file.name);
+  if (context.mounted) {
+    showAppToast(context, ok ? '已导出 ${file.name}' : '导出已取消或失败');
+  }
+}
+
+Future<void> _deleteWorkspaceFile(
+  BuildContext context,
+  WorkspaceFile file,
+) async {
+  final bool? confirmed = await showDialog<bool>(
+    context: context,
+    builder: (BuildContext dialogContext) => AlertDialog(
+      title: const Text('删除文件？'),
+      content: Text(file.name),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext, false),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(dialogContext, true),
+          child: const Text('删除'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true || !context.mounted) return;
+  final SessionStore store = context.sessions;
+  final String root = store.workspacePathFor(store.active.id);
+  final bool ok = await WorkspaceFileService(root).delete(file.name);
+  if (!context.mounted) return;
+  await store.refreshWorkspace();
+  if (context.mounted) {
+    showAppToast(context, ok ? '已删除 ${file.name}' : '删除失败');
   }
 }
 
@@ -441,21 +473,43 @@ class _ImageTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
-    return InkWell(
-      onTap: () => AppNav.openImage(context, file: file.name, gallery: gallery),
-      borderRadius: BorderRadius.circular(10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          WorkspaceImage(file: file.name, aspectRatio: 4 / 3),
-          const SizedBox(height: 4),
-          Text(
-            file.name.split('/').last,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppFonts.mono(size: 10, color: palette.text2),
-          ),
-        ],
+    return context_menu.ContextMenuRegion(
+      actions: <context_menu.ContextAction>[
+        context_menu.ContextAction(
+          label: '查看图片',
+          icon: Icons.open_in_full,
+          onSelected: () =>
+              AppNav.openImage(context, file: file.name, gallery: gallery),
+        ),
+        context_menu.ContextAction(
+          label: '导出',
+          icon: Icons.download_outlined,
+          onSelected: () => _exportWorkspaceFile(context, file),
+        ),
+        context_menu.ContextAction(
+          label: '删除',
+          icon: Icons.delete_outline,
+          destructive: true,
+          onSelected: () => _deleteWorkspaceFile(context, file),
+        ),
+      ],
+      child: InkWell(
+        onTap: () =>
+            AppNav.openImage(context, file: file.name, gallery: gallery),
+        borderRadius: BorderRadius.circular(10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            WorkspaceImage(file: file.name, aspectRatio: 4 / 3),
+            const SizedBox(height: 4),
+            Text(
+              file.name.split('/').last,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppFonts.mono(size: 10, color: palette.text2),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -39,8 +39,11 @@ abstract final class WepTheme {
       scaffoldBackgroundColor: palette.bg,
       canvasColor: palette.bg,
       dividerColor: palette.border,
-      splashFactory: NoSplash.splashFactory,
-      highlightColor: Colors.transparent,
+      // 桌面端没有触屏的物理反馈，点击态必须可见；统一在主题层恢复轻量
+      // ripple，避免每个按钮各写一套 pressed 状态。
+      splashFactory: InkRipple.splashFactory,
+      splashColor: palette.active,
+      highlightColor: palette.active,
       hoverColor: palette.hover,
       textTheme: text,
       iconTheme: IconThemeData(color: palette.text2, size: 18),

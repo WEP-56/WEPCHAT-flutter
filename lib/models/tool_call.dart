@@ -5,10 +5,26 @@ enum ToolStatus { running, done, failed }
 
 /// `web_search` 返回的来源标识。
 class SourceChip {
-  const SourceChip(this.name, this.host);
+  const SourceChip(this.name, this.host, {this.url});
 
   final String name;
   final String host;
+  final String? url;
+}
+
+/// 文件工具完成后展示的局部 diff。
+class FileChangePreview {
+  const FileChangePreview({
+    required this.path,
+    required this.before,
+    required this.after,
+    required this.replacements,
+  });
+
+  final String path;
+  final String before;
+  final String after;
+  final int replacements;
 }
 
 /// 一次工具调用的展示模型。
@@ -25,6 +41,8 @@ class ToolCall {
     this.meta,
     this.note,
     this.found,
+    this.file,
+    this.fileChange,
     this.sources = const <SourceChip>[],
     this.status = ToolStatus.done,
     this.duration,
@@ -53,6 +71,11 @@ class ToolCall {
 
   /// 命中数量文本，例如「找到 5 条来源」。
   final String? found;
+
+  /// 可直接跳转的工作区文件。
+  final String? file;
+
+  final FileChangePreview? fileChange;
 
   final List<SourceChip> sources;
   final ToolStatus status;

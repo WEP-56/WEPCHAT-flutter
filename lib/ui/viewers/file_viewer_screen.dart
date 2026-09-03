@@ -215,7 +215,7 @@ class _HtmlEntry extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'HTML 文件将交给系统默认浏览器打开。',
+            '点击后将在浏览器中预览此 HTML 文件。',
             style: TextStyle(fontSize: 12, color: palette.text3),
           ),
           const SizedBox(height: 12),

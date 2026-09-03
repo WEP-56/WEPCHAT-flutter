@@ -23,7 +23,7 @@ import '../platform/workspace_scanner.dart';
 import '../storage/storage.dart';
 import '../tools/permission_gate.dart';
 import '../tools/tool_registry.dart';
-import '../tools/tool_summary.dart';
+import '../tools/tool.dart';
 import 'app_settings.dart';
 import 'tool_display.dart';
 import 'turn_runner.dart';
@@ -715,25 +715,32 @@ class SessionStore extends ChangeNotifier {
     final String content = entry.payload['content'] as String? ?? '';
     final String outcome = entry.payload['outcome'] as String? ?? 'ok';
     final Object? rawArgs = entry.payload['arguments'];
-
-    final String firstLine = content.split('\n').first.trim();
-    final String prefix = switch (outcome) {
-      'failed' => '失败：',
-      'cancelled' => '已中断：',
-      'denied' => '已拒绝：',
-      _ => '',
+    final Map<String, Object?> arguments = rawArgs is Map
+        ? <String, Object?>{
+            for (final MapEntry<Object?, Object?> item in rawArgs.entries)
+              if (item.key is String) item.key as String: item.value,
+          }
+        : const <String, Object?>{};
+    final ToolOutcome parsedOutcome = switch (outcome) {
+      'failed' => ToolOutcome.failed,
+      'cancelled' => ToolOutcome.cancelled,
+      'denied' => ToolOutcome.denied,
+      _ => ToolOutcome.ok,
     };
-
-    return ToolCall(
+    final Object? rawUi = entry.payload['ui'];
+    final Map<String, Object?>? ui = rawUi is Map
+        ? <String, Object?>{
+            for (final MapEntry<Object?, Object?> item in rawUi.entries)
+              if (item.key is String) item.key as String: item.value,
+          }
+        : null;
+    return restoredToolCall(
       id: entry.id,
-      kind: toolKindOf(name),
-      title: toolTitleOf(name),
-      meta: rawArgs is Map<String, Object?>
-          ? summarizeToolArguments(rawArgs)
-          : null,
-      detail:
-          '$prefix${firstLine.length <= 120 ? firstLine : '${firstLine.substring(0, 120)}…'}',
-      status: outcome == 'ok' ? ToolStatus.done : ToolStatus.failed,
+      name: name,
+      arguments: arguments,
+      content: content,
+      outcome: parsedOutcome,
+      uiPayload: ui,
     );
   }
 

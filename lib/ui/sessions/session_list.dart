@@ -7,6 +7,7 @@ import '../../state/app_scope.dart';
 import '../../state/session_store.dart';
 import '../../theme/palette.dart';
 import '../widgets/controls.dart';
+import '../widgets/context_menu_region.dart' as context_menu;
 
 /// 左侧会话列表：搜索、按时间分组、底部记忆与设置入口。
 class SessionListPanel extends StatefulWidget {
@@ -184,6 +185,8 @@ class _SessionListPanelState extends State<SessionListPanel> {
               store.select(session.id);
               widget.onNavigate?.call();
             },
+            onRename: () => _renameSession(context, store, session),
+            onDelete: () => _deleteSession(context, store, session),
           ),
         );
       }
@@ -200,6 +203,71 @@ class _SessionListPanelState extends State<SessionListPanel> {
     final String needle = _query.toLowerCase();
     return session.title.toLowerCase().contains(needle) ||
         session.preview.toLowerCase().contains(needle);
+  }
+
+  Future<void> _renameSession(
+    BuildContext context,
+    SessionStore store,
+    ChatSession session,
+  ) async {
+    final TextEditingController controller = TextEditingController(
+      text: session.title,
+    );
+    final String? title = await showDialog<String>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: const Text('重命名会话'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 80,
+          decoration: const InputDecoration(hintText: '会话名称'),
+          onSubmitted: (String value) => Navigator.pop(dialogContext, value),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, controller.text),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (title == null || title.trim().isEmpty) return;
+    await store.renameSession(session.id, title);
+  }
+
+  Future<void> _deleteSession(
+    BuildContext context,
+    SessionStore store,
+    ChatSession session,
+  ) async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: const Text('删除会话？'),
+        content: Text('“${session.title}”及其聊天记录将被删除。'),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await store.deleteSession(
+      session.id,
+      fallbackModel: this.context.settings.defaultModelKey,
+    );
   }
 
   Widget _buildFooter(BuildContext context) {
@@ -238,61 +306,80 @@ class _SessionRow extends StatelessWidget {
     required this.session,
     required this.selected,
     required this.onTap,
+    required this.onRename,
+    required this.onDelete,
   });
 
   final ChatSession session;
   final bool selected;
   final VoidCallback onTap;
+  final Future<void> Function() onRename;
+  final Future<void> Function() onDelete;
 
   @override
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        hoverColor: palette.hover,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-          decoration: BoxDecoration(
-            color: selected ? palette.active : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Row(
-                children: <Widget>[
-                  Expanded(
-                    child: Text(
-                      session.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: selected
-                            ? FontWeight.w600
-                            : FontWeight.w500,
-                        color: palette.text1,
+    return context_menu.ContextMenuRegion(
+      actions: <context_menu.ContextAction>[
+        context_menu.ContextAction(
+          label: '重命名',
+          icon: Icons.edit_outlined,
+          onSelected: onRename,
+        ),
+        context_menu.ContextAction(
+          label: '删除会话',
+          icon: Icons.delete_outline,
+          destructive: true,
+          onSelected: onDelete,
+        ),
+      ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(8),
+          hoverColor: palette.hover,
+          child: Ink(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+            decoration: BoxDecoration(
+              color: selected ? palette.active : Colors.transparent,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Text(
+                        session.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: selected
+                              ? FontWeight.w600
+                              : FontWeight.w500,
+                          color: palette.text1,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    session.time,
-                    style: TextStyle(fontSize: 10, color: palette.text3),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 2),
-              Text(
-                session.preview,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 11, color: palette.text3),
-              ),
-            ],
+                    const SizedBox(width: 6),
+                    Text(
+                      session.time,
+                      style: TextStyle(fontSize: 10, color: palette.text3),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  session.preview,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 11, color: palette.text3),
+                ),
+              ],
+            ),
           ),
         ),
       ),

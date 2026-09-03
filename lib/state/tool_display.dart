@@ -69,17 +69,117 @@ ToolCall finishedToolCall(
   ToolResult result, {
   Duration? elapsed,
 }) {
-  return ToolCall(
+  return _buildToolCall(
     id: call.id,
-    kind: toolKindOf(call.name),
-    title: toolTitleOf(call.name),
-    meta: summarizeToolArguments(call.arguments),
+    name: call.name,
+    arguments: call.arguments,
+    result: result,
+    duration: elapsed == null ? null : _durationLabel(elapsed),
+  );
+}
+
+/// 从持久化条目恢复卡片，保证重启前后文件跳转、diff 和来源展示一致。
+ToolCall restoredToolCall({
+  required String id,
+  required String name,
+  required Map<String, Object?> arguments,
+  required String content,
+  required ToolOutcome outcome,
+  Map<String, Object?>? uiPayload,
+}) {
+  return _buildToolCall(
+    id: id,
+    name: name,
+    arguments: arguments,
+    result: ToolResult(
+      content: content,
+      outcome: outcome,
+      uiPayload: uiPayload,
+    ),
+  );
+}
+
+ToolCall _buildToolCall({
+  required String id,
+  required String name,
+  required Map<String, Object?> arguments,
+  required ToolResult result,
+  String? duration,
+}) {
+  final Map<String, Object?> ui = result.uiPayload ?? const <String, Object?>{};
+  return ToolCall(
+    id: id,
+    kind: toolKindOf(name),
+    title: toolTitleOf(name),
+    meta: summarizeToolArguments(arguments),
     detail: _detailOf(result),
+    file: _filePath(name, ui),
+    fileChange: _fileChange(name, ui),
+    sources: _sources(name, ui),
     status: result.outcome == ToolOutcome.ok
         ? ToolStatus.done
         : ToolStatus.failed,
-    duration: elapsed == null ? null : _durationLabel(elapsed),
+    duration: duration,
   );
+}
+
+String? _filePath(String name, Map<String, Object?> ui) {
+  if (!<String>{'read_file', 'write_file', 'edit_file'}.contains(name)) {
+    return null;
+  }
+  final Object? path = ui['path'];
+  return path is String && path.trim().isNotEmpty ? path : null;
+}
+
+FileChangePreview? _fileChange(String name, Map<String, Object?> ui) {
+  if (name != 'edit_file') return null;
+  final Object? rawPath = ui['path'];
+  final Object? rawBefore = ui['find'];
+  final Object? rawAfter = ui['replace'];
+  final String? path = rawPath is String ? rawPath : null;
+  final String? before = rawBefore is String ? rawBefore : null;
+  final String? after = rawAfter is String ? rawAfter : null;
+  final Object? rawCount = ui['replacements'];
+  final int count = rawCount is int ? rawCount : int.tryParse('$rawCount') ?? 1;
+  if (path == null || before == null || after == null) return null;
+  return FileChangePreview(
+    path: path,
+    before: _capDiff(before),
+    after: _capDiff(after),
+    replacements: count,
+  );
+}
+
+String _capDiff(String value) =>
+    value.length <= 1200 ? value : '${value.substring(0, 1200)}…';
+
+List<SourceChip> _sources(String name, Map<String, Object?> ui) {
+  if (name == 'web_fetch') {
+    final Object? rawUrl = ui['url'];
+    final String? url = rawUrl is String ? rawUrl : null;
+    if (url == null) return const <SourceChip>[];
+    final Uri? uri = Uri.tryParse(url);
+    return uri == null || uri.host.isEmpty
+        ? const <SourceChip>[]
+        : <SourceChip>[SourceChip(uri.host, uri.host, url: url)];
+  }
+  if (name != 'web_search' || ui['results'] is! List) {
+    return const <SourceChip>[];
+  }
+  final List<SourceChip> sources = <SourceChip>[];
+  for (final Object? raw in ui['results']! as List) {
+    if (raw is! Map) continue;
+    final Object? rawUrl = raw['url'];
+    if (rawUrl is! String) continue;
+    final Uri? uri = Uri.tryParse(rawUrl);
+    if (uri == null || uri.host.isEmpty) continue;
+    final String title =
+        raw['title'] is String && (raw['title'] as String).trim().isNotEmpty
+        ? raw['title'] as String
+        : uri.host;
+    sources.add(SourceChip(title, uri.host, url: rawUrl));
+  }
+  return sources;
 }
 
 /// 卡片折叠时那一行的摘要。

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../app/app_nav.dart';
+import '../../browser/browser_launcher.dart';
 import '../../models/tool_call.dart';
 import '../../theme/fonts.dart';
 import '../../theme/palette.dart';
@@ -165,6 +167,21 @@ class _ToolDetail extends StatelessWidget {
         ),
       );
     }
+    if (call.fileChange != null) {
+      rows.add(
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: _FileDiffCard(change: call.fileChange!),
+        ),
+      );
+    } else if (call.file != null) {
+      rows.add(
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: _FileJumpCard(file: call.file!),
+        ),
+      );
+    }
 
     return Container(
       width: double.infinity,
@@ -223,21 +240,161 @@ class _SourceChipView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+    return InkWell(
+      onTap: chip.url == null ? null : () => openWebUrl(context, chip.url!),
+      borderRadius: BorderRadius.circular(6),
+      child: Ink(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        decoration: BoxDecoration(
+          color: palette.bgRaise,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(Icons.link, size: 11, color: palette.accent),
+            const SizedBox(width: 5),
+            Text(
+              chip.name,
+              style: TextStyle(fontSize: 11, color: palette.text1),
+            ),
+            const SizedBox(width: 5),
+            Text(
+              chip.host,
+              style: AppFonts.mono(size: 10, color: palette.text3),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FileJumpCard extends StatelessWidget {
+  const _FileJumpCard({required this.file});
+  final String file;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppPalette palette = context.palette;
+    final bool html =
+        file.toLowerCase().endsWith('.html') ||
+        file.toLowerCase().endsWith('.htm');
+    return InkWell(
+      onTap: () => html
+          ? AppNav.openHtml(context, file: file)
+          : AppNav.openFile(context, file: file),
+      borderRadius: BorderRadius.circular(8),
+      child: Ink(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+        decoration: BoxDecoration(
+          color: palette.bgRaise,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: <Widget>[
+            Icon(
+              html ? Icons.language : Icons.insert_drive_file_outlined,
+              size: 16,
+              color: palette.accent,
+            ),
+            const SizedBox(width: 7),
+            Expanded(
+              child: Text(
+                file,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppFonts.mono(size: 11, color: palette.text1),
+              ),
+            ),
+            Icon(
+              html ? Icons.open_in_browser : Icons.open_in_new,
+              size: 14,
+              color: palette.text3,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FileDiffCard extends StatelessWidget {
+  const _FileDiffCard({required this.change});
+  final FileChangePreview change;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppPalette palette = context.palette;
+    return Ink(
+      padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         color: palette.bgRaise,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: palette.border),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          Icon(Icons.link, size: 11, color: palette.text3),
-          const SizedBox(width: 5),
-          Text(chip.name, style: TextStyle(fontSize: 11, color: palette.text1)),
-          const SizedBox(width: 5),
-          Text(chip.host, style: AppFonts.mono(size: 10, color: palette.text3)),
+          InkWell(
+            onTap: () => AppNav.openFile(context, file: change.path),
+            borderRadius: BorderRadius.circular(5),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                children: <Widget>[
+                  Icon(
+                    Icons.difference_outlined,
+                    size: 15,
+                    color: palette.accent,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      '已修改 ${change.path}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 11.5, color: palette.text1),
+                    ),
+                  ),
+                  Text(
+                    '${change.replacements} 处',
+                    style: TextStyle(fontSize: 10, color: palette.text3),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          _DiffLine(prefix: '-', value: change.before, color: palette.danger),
+          const SizedBox(height: 3),
+          _DiffLine(prefix: '+', value: change.after, color: palette.good),
         ],
+      ),
+    );
+  }
+}
+
+class _DiffLine extends StatelessWidget {
+  const _DiffLine({
+    required this.prefix,
+    required this.value,
+    required this.color,
+  });
+  final String prefix;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+      color: color.withValues(alpha: 0.1),
+      child: Text(
+        '$prefix ${value.replaceAll('\n', ' ↵ ')}',
+        maxLines: 3,
+        overflow: TextOverflow.ellipsis,
+        style: AppFonts.mono(size: 10.5, color: color),
       ),
     );
   }
