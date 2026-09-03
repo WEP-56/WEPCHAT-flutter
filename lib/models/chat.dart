@@ -18,7 +18,11 @@ class Attachment {
 
 /// 尚未落库的用户附件；发送时转成请求层的 ImagePart 或文本内容。
 class PendingAttachment {
-  const PendingAttachment({required this.name, required this.mimeType, required this.bytes});
+  const PendingAttachment({
+    required this.name,
+    required this.mimeType,
+    required this.bytes,
+  });
   final String name;
   final String mimeType;
   final Uint8List bytes;

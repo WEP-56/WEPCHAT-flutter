@@ -5,7 +5,7 @@
 library;
 
 /// 数据库模式版本，存在 `PRAGMA user_version` 里。
-const int kSchemaVersion = 1;
+const int kSchemaVersion = 2;
 
 /// 每次打开连接都要执行的 PRAGMA。
 ///
@@ -30,6 +30,12 @@ const List<String> kSchemaV1 = <String>[
   kCreateBlobRefs,
   kCreateBlobRefsSessionIndex,
   kCreateRuns,
+];
+
+/// v1 → v2 的迁移：增加 memories 表（功能协议 §7）。
+const List<String> kMigrationV2 = <String>[
+  kCreateMemories,
+  kCreateMemoriesCategoryKeyIndex,
 ];
 
 /// `sessions` 表：会话元信息 + 派生状态缓存（存储设计 §5.1）。
@@ -115,3 +121,24 @@ CREATE TABLE runs (
   finished_at INTEGER,
   outcome     TEXT
 )''';
+
+/// `memories` 表：全局记忆，App 级持久化（功能协议 §7）。
+///
+/// 不属于任何单个会话工作区，由 App 私有存储维护。记忆是 LLM 的工作笔记本，
+/// 分三个区域：user_profile（用户画像）、user_preference（用户倾向）、
+/// volatile（波动区域）。
+///
+/// 更新规则：相同 `category + key` 时覆盖，否则新增。
+const String kCreateMemories = '''
+CREATE TABLE memories (
+  id         TEXT    PRIMARY KEY,
+  category   TEXT    NOT NULL,
+  key        TEXT    NOT NULL,
+  content    TEXT    NOT NULL,
+  tags       TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+)''';
+
+const String kCreateMemoriesCategoryKeyIndex =
+    'CREATE UNIQUE INDEX memories_category_key ON memories(category, key)';

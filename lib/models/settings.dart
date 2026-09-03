@@ -109,6 +109,13 @@ const List<ToolPermissionSpec> kToolPermissionSpecs = <ToolPermissionSpec>[
     icon: Icons.auto_fix_high_outlined,
     defaultPermission: ToolPermission.allowed,
   ),
+  ToolPermissionSpec(
+    id: 'memory',
+    name: '全局记忆',
+    desc: 'save_memory · list_memory · read_memory · delete_memory',
+    icon: Icons.psychology_outlined,
+    defaultPermission: ToolPermission.allowed,
+  ),
 ];
 
 /// 模型供应商配置卡片的展示模型。

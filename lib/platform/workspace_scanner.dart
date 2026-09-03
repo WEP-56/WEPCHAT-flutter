@@ -38,8 +38,7 @@ Future<List<WorkspaceFile>> scanWorkspaceDirectory(String path) async {
     }
 
     // 按修改时间倒序：最新的在前。
-    files.sort((WorkspaceFile a, WorkspaceFile b) =>
-        b.time.compareTo(a.time));
+    files.sort((WorkspaceFile a, WorkspaceFile b) => b.time.compareTo(a.time));
     return files;
   } on FileSystemException {
     return <WorkspaceFile>[];

@@ -10,6 +10,7 @@ import '../ai/provider_api.dart';
 import '../core/cancellation_token.dart';
 import '../platform/workspace_guard.dart';
 import '../state/app_settings.dart';
+import '../storage/storage.dart';
 
 /// 一次工具执行的收场方式（实施 TODO §7-3）。
 ///
@@ -91,6 +92,7 @@ class ToolContext {
     required this.workspace,
     required this.token,
     this.settings,
+    this.storage,
   });
 
   final String sessionId;
@@ -106,6 +108,9 @@ class ToolContext {
 
   /// 应用级搜索与图片配置，以及默认模型选择。
   final AppSettings? settings;
+
+  /// 全局存储，记忆工具需要。
+  final WepStorage? storage;
 
   String get workspaceRoot => workspace.root;
 }

@@ -7,6 +7,8 @@ import 'blob_store.dart';
 import 'entry_dao.dart';
 import 'entry_record.dart';
 import 'isolate_protocol.dart';
+import 'memory_dao.dart';
+import 'memory_record.dart';
 import 'migration.dart';
 import 'models.dart';
 import 'run_dao.dart';
@@ -17,7 +19,14 @@ import 'session_record.dart';
 ///
 /// 不导出给 UI 层——外部只经 [StorageIsolate] 访问（存储设计 §10）。
 class DbWorker {
-  DbWorker._(this._db, this._sessions, this._entries, this._runs, this._blobs);
+  DbWorker._(
+    this._db,
+    this._sessions,
+    this._entries,
+    this._runs,
+    this._blobs,
+    this._memories,
+  );
 
   /// 打开库、跑迁移、装配 DAO。在 isolate 内调用。
   factory DbWorker.open({required String dbPath, required String blobRoot}) {
@@ -30,6 +39,7 @@ class DbWorker {
         EntryDao(db, blobs),
         RunDao(db),
         blobs,
+        MemoryDao(db),
       );
     } on Object {
       db.dispose();
@@ -42,6 +52,7 @@ class DbWorker {
   final EntryDao _entries;
   final RunDao _runs;
   final BlobStore _blobs;
+  final MemoryDao _memories;
 
   /// 分派一个请求。返回值直接进 [DbSuccess]。
   Object? handle(DbRequest request) {
@@ -102,6 +113,20 @@ class DbWorker {
 
       case CollectBlobGarbageRequest():
         return _inTransaction(() => _blobs.collectGarbage());
+
+      case ListMemoriesRequest(:final String? category):
+        return _memories.listSummaries(category: category);
+
+      case ReadMemoryRequest(:final String memoryId):
+        return _memories.findById(memoryId);
+
+      case SaveMemoryRequest(:final MemoryRecord memory):
+        _inTransaction(() => _memories.upsert(memory));
+        return null;
+
+      case DeleteMemoryRequest(:final String memoryId):
+        _inTransaction(() => _memories.delete(memoryId));
+        return null;
 
       case ShutdownRequest():
         // 关闭由消息循环处理，这里不该收到。

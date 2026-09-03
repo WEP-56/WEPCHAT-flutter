@@ -9,6 +9,7 @@
 library;
 
 import 'entry_record.dart';
+import 'memory_record.dart';
 import 'models.dart';
 import 'session_record.dart';
 
@@ -179,6 +180,32 @@ class FinishRunRequest extends DbRequest {
 
 class CollectBlobGarbageRequest extends DbRequest {
   const CollectBlobGarbageRequest(super.id);
+}
+
+// ---- 记忆 ----
+
+class ListMemoriesRequest extends DbRequest {
+  const ListMemoriesRequest(super.id, {this.category});
+
+  final String? category;
+}
+
+class ReadMemoryRequest extends DbRequest {
+  const ReadMemoryRequest(super.id, this.memoryId);
+
+  final String memoryId;
+}
+
+class SaveMemoryRequest extends DbRequest {
+  const SaveMemoryRequest(super.id, this.memory);
+
+  final MemoryRecord memory;
+}
+
+class DeleteMemoryRequest extends DbRequest {
+  const DeleteMemoryRequest(super.id, this.memoryId);
+
+  final String memoryId;
 }
 
 /// 让 isolate 关掉连接并退出。

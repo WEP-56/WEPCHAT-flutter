@@ -117,6 +117,9 @@ class SessionStore extends ChangeNotifier {
   List<ChatSession> _sessions;
   String _activeId;
 
+  /// 全局存储，供设置页等界面直接访问。
+  WepStorage get storage => _storage;
+
   /// 当前会话工作区的绝对路径，供文件查看等应用内入口使用。
   ///
   /// 路径根由启动时解析，避免 UI 直接拼接仍可能包含 `~` 的设置值。
@@ -430,6 +433,7 @@ class SessionStore extends ChangeNotifier {
         workspace: WorkspaceGuard(_workspaces.ensureSession(sessionId)),
         systemPrompt: _systemPrompt(sessionId),
         settings: _settings,
+        storage: _storage,
         maxOutputTokens: model.maxOutputTokens,
         // o 系列拒收 temperature，靠模型的兼容开关决定发不发（§4.2）。
         temperature: model.compat.supportsTemperature

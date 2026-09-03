@@ -5,6 +5,7 @@ library;
 
 export 'blob_store.dart' show BlobGcResult;
 export 'entry_record.dart' show EntryRecord, NewEntry;
+export 'memory_record.dart' show MemoryRecord, MemorySummary;
 export 'models.dart'
     show
         EntryRole,

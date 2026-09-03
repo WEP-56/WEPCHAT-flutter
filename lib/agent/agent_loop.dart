@@ -8,6 +8,7 @@ import '../ai/stream_event.dart';
 import '../core/cancellation_token.dart';
 import '../platform/workspace_guard.dart';
 import '../state/app_settings.dart';
+import '../storage/storage.dart' hide StopReason, TokenUsage;
 import '../tools/tool.dart';
 import '../tools/tool_registry.dart';
 import 'agent_event.dart';
@@ -19,6 +20,7 @@ class AgentConfig {
     required this.sessionId,
     required this.workspace,
     this.settings,
+    this.storage,
     this.systemPrompt,
     this.maxIterations = 20,
     this.maxOutputTokens,
@@ -32,6 +34,9 @@ class AgentConfig {
   /// 这个会话工作区的路径守卫，直接进 [ToolContext]。
   final WorkspaceGuard workspace;
   final AppSettings? settings;
+
+  /// 全局存储，记忆工具需要。
+  final WepStorage? storage;
 
   final String? systemPrompt;
 
@@ -168,6 +173,7 @@ class AgentLoop {
             workspace: _config.workspace,
             token: token,
             settings: _config.settings,
+            storage: _config.storage,
           ),
         );
 

@@ -16,7 +16,10 @@ class Migration {
 
 /// 迁移序列，按 `toVersion` 升序。只允许追加，不允许修改已发布的条目
 /// ——用户库里已经执行过的语句改了也不会重跑，只会让新旧库结构分叉。
-const List<Migration> kMigrations = <Migration>[Migration(1, kSchemaV1)];
+const List<Migration> kMigrations = <Migration>[
+  Migration(1, kSchemaV1),
+  Migration(2, kMigrationV2),
+];
 
 /// 打开数据库、应用连接级 PRAGMA、执行待办迁移。
 ///

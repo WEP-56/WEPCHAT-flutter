@@ -2,6 +2,7 @@ import '../core/ulid.dart';
 import 'blob_store.dart';
 import 'entry_record.dart';
 import 'isolate_protocol.dart';
+import 'memory_record.dart';
 import 'models.dart';
 import 'session_record.dart';
 import 'storage_isolate.dart';
@@ -240,6 +241,36 @@ class WepStorage {
   /// （存储设计 §14 第 5 条）。
   Future<BlobGcResult> collectBlobGarbage() {
     return _isolate.send<BlobGcResult>(CollectBlobGarbageRequest.new);
+  }
+
+  // ---- 记忆 ----
+
+  /// 列出所有记忆的摘要（前 100 字符），按更新时间倒序。
+  ///
+  /// [category] 非空时只返回该分类的记忆。
+  Future<List<MemorySummary>> listMemories({String? category}) {
+    return _isolate.send<List<MemorySummary>>(
+      (int id) => ListMemoriesRequest(id, category: category),
+    );
+  }
+
+  /// 读取一条完整记忆。
+  Future<MemoryRecord?> readMemory(String memoryId) {
+    return _isolate.send<MemoryRecord?>(
+      (int id) => ReadMemoryRequest(id, memoryId),
+    );
+  }
+
+  /// 保存或更新记忆。相同 `category + key` 时覆盖，否则新增。
+  Future<void> saveMemory(MemoryRecord memory) {
+    return _isolate.send<Object?>((int id) => SaveMemoryRequest(id, memory));
+  }
+
+  /// 删除一条记忆。
+  Future<void> deleteMemory(String memoryId) {
+    return _isolate.send<Object?>(
+      (int id) => DeleteMemoryRequest(id, memoryId),
+    );
   }
 
   Future<void> close() => _isolate.close();

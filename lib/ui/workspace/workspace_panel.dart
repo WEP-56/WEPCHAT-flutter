@@ -350,7 +350,7 @@ class _FileRow extends StatelessWidget {
     return context_menu.ContextMenuRegion(
       actions: <context_menu.ContextAction>[
         context_menu.ContextAction(
-          label: file.kind == FileKind.html ? '在浏览器中预览' : '预览',
+          label: '预览',
           icon: Icons.open_in_new,
           onSelected: () => _openWorkspaceFile(context, file),
         ),

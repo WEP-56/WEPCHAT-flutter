@@ -13,6 +13,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     CreateAndAttachConsole();
   }
 
+  // 屏蔽 accessibility_bridge 的噪音日志
+  // 这些错误是 Flutter 引擎的已知问题，不影响功能
+  SetEnvironmentVariableA("FLUTTER_ENGINE_LOG_LEVEL", "error");
+
   // Initialize COM, so that it is available for use in the library and/or
   // plugins.
   ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);

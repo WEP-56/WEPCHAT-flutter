@@ -15,6 +15,7 @@ import 'workspace/write_file_tool.dart';
 import 'web/web_fetch_tool.dart';
 import 'web/web_search_tool.dart';
 import 'image/image_tools.dart';
+import 'memory/memory_tools.dart';
 
 /// M2 的工作区文件工具全集（§7-14）。
 const List<Tool> kWorkspaceTools = <Tool>[
@@ -35,9 +36,18 @@ const List<Tool> kNetworkAndImageTools = <Tool>[
   EditImageTool(),
 ];
 
+/// 全局记忆工具（功能协议 §7）。
+const List<Tool> kMemoryTools = <Tool>[
+  SaveMemoryTool(),
+  ListMemoryTool(),
+  ReadMemoryTool(),
+  DeleteMemoryTool(),
+];
+
 const List<Tool> kDefaultTools = <Tool>[
   ...kWorkspaceTools,
   ...kNetworkAndImageTools,
+  ...kMemoryTools,
 ];
 
 /// 工具的查找与声明排序。
