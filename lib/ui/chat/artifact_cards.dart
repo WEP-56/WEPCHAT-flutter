@@ -104,7 +104,7 @@ class ImageResultView extends StatelessWidget {
   }
 }
 
-/// HTML 产物卡片，交给系统默认浏览器打开。
+/// HTML 产物卡片，点击进入应用内预览。
 class HtmlArtifactCard extends StatelessWidget {
   const HtmlArtifactCard({super.key, required this.ref});
 
@@ -158,7 +158,7 @@ class HtmlArtifactCard extends StatelessWidget {
                 ),
               ),
               const Pill(
-                '浏览器打开',
+                '预览',
                 tone: PillTone.accent,
                 icon: Icons.open_in_browser,
               ),

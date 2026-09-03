@@ -50,4 +50,47 @@ void main() {
     expect(call.fileChange?.before, equals('old();'));
     expect(call.fileChange?.after, equals('new();'));
   });
+
+  test('图片工具结果恢复为聊天图片产物', () {
+    final ToolCall call = restoredToolCall(
+      id: 'image-1',
+      name: 'gen_image',
+      arguments: const <String, Object?>{'prompt': '海边'},
+      content: '图片生成完成',
+      outcome: ToolOutcome.ok,
+      uiPayload: const <String, Object?>{
+        'paths': <String>['images/a.png', 'images/b.png'],
+      },
+    );
+
+    expect(call.outputFiles, equals(<String>['images/a.png', 'images/b.png']));
+  });
+
+  test('HTML 写入结果恢复为独立预览产物', () {
+    final ToolCall call = restoredToolCall(
+      id: 'html-1',
+      name: 'write_file',
+      arguments: const <String, Object?>{'path': 'site/index.html'},
+      content: '已创建 site/index.html',
+      outcome: ToolOutcome.ok,
+      uiPayload: const <String, Object?>{'path': 'site/index.html'},
+    );
+
+    expect(call.htmlFile, 'site/index.html');
+  });
+
+  test('run_js 写出的 HTML 恢复为独立预览产物', () {
+    final ToolCall call = restoredToolCall(
+      id: 'js-1',
+      name: 'run_js',
+      arguments: const <String, Object?>{'code': 'test'},
+      content: 'done',
+      outcome: ToolOutcome.ok,
+      uiPayload: const <String, Object?>{
+        'paths': <String>['data.json', 'report.html'],
+      },
+    );
+
+    expect(call.htmlFile, 'report.html');
+  });
 }

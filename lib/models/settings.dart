@@ -91,7 +91,7 @@ const List<ToolPermissionSpec> kToolPermissionSpecs = <ToolPermissionSpec>[
   ToolPermissionSpec(
     id: 'run_js',
     name: '运行 JavaScript',
-    desc: 'run_js，受限沙盒，无网络与进程权限',
+    desc: 'run_js，可联网；无 Shell、进程与环境变量权限',
     icon: Icons.terminal,
     defaultPermission: ToolPermission.ask,
   ),

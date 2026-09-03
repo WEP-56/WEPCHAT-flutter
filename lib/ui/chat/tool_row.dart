@@ -174,7 +174,7 @@ class _ToolDetail extends StatelessWidget {
           child: _FileDiffCard(change: call.fileChange!),
         ),
       );
-    } else if (call.file != null) {
+    } else if (call.file != null && call.htmlFile == null) {
       rows.add(
         Padding(
           padding: const EdgeInsets.only(top: 8),
@@ -182,7 +182,6 @@ class _ToolDetail extends StatelessWidget {
         ),
       );
     }
-
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(34, 2, 10, 10),

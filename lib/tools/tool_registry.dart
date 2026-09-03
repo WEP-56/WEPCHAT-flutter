@@ -16,6 +16,7 @@ import 'web/web_fetch_tool.dart';
 import 'web/web_search_tool.dart';
 import 'image/image_tools.dart';
 import 'memory/memory_tools.dart';
+import 'script/run_js_tool.dart';
 
 /// M2 的工作区文件工具全集（§7-14）。
 const List<Tool> kWorkspaceTools = <Tool>[
@@ -48,6 +49,7 @@ const List<Tool> kDefaultTools = <Tool>[
   ...kWorkspaceTools,
   ...kNetworkAndImageTools,
   ...kMemoryTools,
+  RunJsTool(),
 ];
 
 /// 工具的查找与声明排序。

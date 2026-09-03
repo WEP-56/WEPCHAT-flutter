@@ -42,6 +42,8 @@ class ToolCall {
     this.note,
     this.found,
     this.file,
+    this.outputFiles = const <String>[],
+    this.htmlFile,
     this.fileChange,
     this.sources = const <SourceChip>[],
     this.status = ToolStatus.done,
@@ -74,6 +76,12 @@ class ToolCall {
 
   /// 可直接跳转的工作区文件。
   final String? file;
+
+  /// 文件/图片工具产生的工作区相对路径，独立于工具详情卡片展示。
+  final List<String> outputFiles;
+
+  /// HTML 产物的预览入口。
+  final String? htmlFile;
 
   final FileChangePreview? fileChange;
 

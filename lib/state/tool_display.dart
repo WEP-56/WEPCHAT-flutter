@@ -114,6 +114,8 @@ ToolCall _buildToolCall({
     meta: summarizeToolArguments(arguments),
     detail: _detailOf(result),
     file: _filePath(name, ui),
+    outputFiles: _outputFiles(name, ui),
+    htmlFile: _htmlFile(name, ui),
     fileChange: _fileChange(name, ui),
     sources: _sources(name, ui),
     status: result.outcome == ToolOutcome.ok
@@ -121,6 +123,42 @@ ToolCall _buildToolCall({
         : ToolStatus.failed,
     duration: duration,
   );
+}
+
+List<String> _outputFiles(String name, Map<String, Object?> ui) {
+  if (name == 'gen_image' || name == 'edit_image') {
+    final Object? raw = ui['paths'];
+    if (raw is List) {
+      return <String>[
+        for (final Object? p in raw)
+          if (p is String && p.isNotEmpty) p,
+      ];
+    }
+  }
+  return const <String>[];
+}
+
+String? _htmlFile(String name, Map<String, Object?> ui) {
+  if (name != 'write_file' && name != 'edit_file' && name != 'run_js') {
+    return null;
+  }
+  Object? raw = ui['path'];
+  if (name == 'run_js' && ui['paths'] is List) {
+    for (final Object? path in ui['paths']! as List) {
+      if (path is String &&
+          (path.toLowerCase().endsWith('.html') ||
+              path.toLowerCase().endsWith('.htm'))) {
+        raw = path;
+        break;
+      }
+    }
+  }
+  if (raw is! String ||
+      (!raw.toLowerCase().endsWith('.html') &&
+          !raw.toLowerCase().endsWith('.htm'))) {
+    return null;
+  }
+  return raw;
 }
 
 String? _filePath(String name, Map<String, Object?> ui) {

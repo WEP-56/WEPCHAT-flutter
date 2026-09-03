@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/responsive.dart';
 import '../../models/chat.dart';
+import '../../models/tool_call.dart';
 import '../../state/app_scope.dart';
 import '../../state/session_store.dart';
 import '../../theme/palette.dart';
@@ -167,6 +168,8 @@ class _ChatViewState extends State<ChatView> {
     final List<String> gallery = <String>[
       for (final ChatMessage message in session.messages)
         for (final ImageResult image in message.images) image.file,
+      for (final ChatMessage message in session.messages)
+        for (final ToolCall tool in message.tools) ...tool.outputFiles,
     ];
 
     // 整个列表包在一个 `SelectionArea` 里，而不是每条消息各包一个：跨消息

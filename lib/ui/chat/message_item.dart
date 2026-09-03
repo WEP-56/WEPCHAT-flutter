@@ -117,6 +117,32 @@ class _MessageItemViewState extends State<MessageItemView> {
           child: ToolRowView(call: call),
         ),
       );
+      for (final String file in call.outputFiles) {
+        children.add(
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: ImageResultView(
+              result: ImageResult(file: file, meta: call.title),
+              gallery: gallery,
+            ),
+          ),
+        );
+      }
+      final String? htmlFile = call.htmlFile;
+      if (htmlFile != null) {
+        children.add(
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: HtmlArtifactCard(
+              ref: HtmlRef(
+                file: htmlFile,
+                title: htmlFile.split('/').last,
+                desc: 'HTML 预览',
+              ),
+            ),
+          ),
+        );
+      }
     }
     if (message.blocks.isNotEmpty) {
       children.add(BlocksView(blocks: message.blocks));
