@@ -29,6 +29,8 @@ class AppSettings extends ChangeNotifier {
     required ThemeMode themeMode,
     required AppAccent accent,
     required MemoryMode memoryMode,
+    required String customSystemPrompt,
+    required bool autoCheckUpdates,
     required double temperature,
     required String searchBackendId,
     required String searchApiKey,
@@ -45,6 +47,8 @@ class AppSettings extends ChangeNotifier {
        _themeMode = themeMode,
        _accent = accent,
        _memoryMode = memoryMode,
+       _customSystemPrompt = customSystemPrompt,
+       _autoCheckUpdates = autoCheckUpdates,
        _temperature = temperature,
        _searchBackendId = searchBackendId,
        _searchApiKey = searchApiKey,
@@ -87,6 +91,8 @@ class AppSettings extends ChangeNotifier {
         MemoryMode.allow,
         (MemoryMode v) => v.name,
       ),
+      customSystemPrompt: json['customSystemPrompt'] as String? ?? '',
+      autoCheckUpdates: json['autoCheckUpdates'] as bool? ?? true,
       temperature: (json['temperature'] as num?)?.toDouble().clamp(0, 2) ?? 0.7,
       searchBackendId:
           json['searchBackendId'] as String? ?? kSearchBackends.first.id,
@@ -124,6 +130,8 @@ class AppSettings extends ChangeNotifier {
   ThemeMode _themeMode;
   AppAccent _accent;
   MemoryMode _memoryMode;
+  String _customSystemPrompt;
+  bool _autoCheckUpdates;
   double _temperature;
   String _searchBackendId;
   String _searchApiKey;
@@ -148,6 +156,8 @@ class AppSettings extends ChangeNotifier {
   ThemeMode get themeMode => _themeMode;
   AppAccent get accent => _accent;
   MemoryMode get memoryMode => _memoryMode;
+  String get customSystemPrompt => _customSystemPrompt;
+  bool get autoCheckUpdates => _autoCheckUpdates;
   double get temperature => _temperature;
   String get searchBackendId => _searchBackendId;
   List<SearchProviderConfig> get searchProviders =>
@@ -300,6 +310,23 @@ class AppSettings extends ChangeNotifier {
   void setMemoryMode(MemoryMode mode) {
     if (_memoryMode == mode) return;
     _memoryMode = mode;
+    _changed();
+  }
+
+  /// 用户自定义的 system prompt 追加内容。
+  ///
+  /// 固定的工作区与记忆规则由 [SessionStore] 始终保留；这里的内容只作为
+  /// 追加指令，适合角色、语气和输出格式偏好。
+  void setCustomSystemPrompt(String prompt) {
+    final String value = prompt.trim().isEmpty ? '' : prompt;
+    if (_customSystemPrompt == value) return;
+    _customSystemPrompt = value;
+    _changed();
+  }
+
+  void setAutoCheckUpdates(bool enabled) {
+    if (_autoCheckUpdates == enabled) return;
+    _autoCheckUpdates = enabled;
     _changed();
   }
 
@@ -617,6 +644,8 @@ class AppSettings extends ChangeNotifier {
         e.key: e.value.name,
     },
     'memoryMode': _memoryMode.name,
+    'customSystemPrompt': _customSystemPrompt,
+    'autoCheckUpdates': _autoCheckUpdates,
     'searchBackendId': _searchBackendId,
     'searchApiKey': _searchApiKey,
     'searchBaseUrl': _searchBaseUrl,

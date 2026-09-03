@@ -24,14 +24,31 @@ class MemorySection extends StatefulWidget {
 class _MemorySectionState extends State<MemorySection> {
   List<MemorySummary>? _memories;
   String? _error;
+  late final TextEditingController _customPromptController;
+  bool _customPromptInitialized = false;
 
   @override
   void initState() {
     super.initState();
+    _customPromptController = TextEditingController();
     // 延迟到 build 之后再加载，避免在 initState 中访问 InheritedWidget
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _loadMemories();
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_customPromptInitialized) return;
+    _customPromptController.text = context.settings.customSystemPrompt;
+    _customPromptInitialized = true;
+  }
+
+  @override
+  void dispose() {
+    _customPromptController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadMemories() async {
@@ -95,6 +112,49 @@ class _MemorySectionState extends State<MemorySection> {
                     .map((MemoryMode m) => SegOption<MemoryMode>(m, m.label))
                     .toList(),
                 onChanged: settings.setMemoryMode,
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: 8, bottom: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    '自定义 system prompt',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w500,
+                      color: palette.text1,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    '追加在工作区规则和记忆规则之后，可用于角色、语气和输出格式。不会替换内置规则。',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: palette.text3,
+                      height: 1.45,
+                    ),
+                  ),
+                  const SizedBox(height: 7),
+                  TextField(
+                    controller: _customPromptController,
+                    minLines: 4,
+                    maxLines: 8,
+                    onChanged: settings.setCustomSystemPrompt,
+                    style: TextStyle(fontSize: 13, color: palette.text1),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      hintText: '例如：你是一位耐心的编程导师，回答时先给结论，再给步骤。',
+                      hintStyle: TextStyle(
+                        fontSize: 12.5,
+                        color: palette.text3,
+                      ),
+                      contentPadding: const EdgeInsets.all(10),
+                      border: const OutlineInputBorder(),
+                    ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 4),

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../app/responsive.dart';
 import '../../theme/palette.dart';
 import 'sections/appearance_section.dart';
+import 'sections/about_section.dart';
 import 'sections/browser_section.dart';
 import 'sections/memory_section.dart';
 import 'sections/model_section.dart';
@@ -28,6 +29,7 @@ const List<_SectionSpec> _kSections = <_SectionSpec>[
   _SectionSpec('appearance', '外观', '主题、强调色与显示偏好', Icons.palette_outlined),
   _SectionSpec('storage', '存储', '工作区和本地数据位置', Icons.folder_outlined),
   _SectionSpec('browser', '浏览器', '内置浏览器与历史记录', Icons.language_outlined),
+  _SectionSpec('about', '关于', '版本、开源仓库与更新', Icons.info_outline),
 ];
 
 String? _canonicalSectionId(String? id) {
@@ -285,6 +287,7 @@ Widget _sectionFor(String id) {
     'appearance' => const AppearanceSection(),
     'storage' => const WorkspaceSection(),
     'browser' => const BrowserSection(),
+    'about' => const AboutSection(),
     _ => throw ArgumentError.value(id, 'id', '未知设置分区'),
   };
 }

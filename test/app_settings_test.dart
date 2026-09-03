@@ -61,4 +61,17 @@ void main() {
     settings.setWorkspaceRoot(r'  D:\WePChat\ws  ');
     expect(settings.workspaceRoot, r'D:\WePChat\ws');
   });
+
+  test('自定义 system prompt 会更新并写入设置 JSON', () {
+    final AppSettings settings = AppSettings.memory();
+    addTearDown(settings.dispose);
+
+    settings.setCustomSystemPrompt('你是一位耐心的编程导师。');
+
+    expect(settings.customSystemPrompt, '你是一位耐心的编程导师。');
+    expect(settings.toJson()['customSystemPrompt'], '你是一位耐心的编程导师。');
+
+    settings.setCustomSystemPrompt('   ');
+    expect(settings.customSystemPrompt, isEmpty);
+  });
 }

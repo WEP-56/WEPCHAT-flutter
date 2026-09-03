@@ -21,28 +21,28 @@ class SaveMemoryTool extends Tool {
   ToolDefinition get definition => const ToolDefinition(
     name: 'save_memory',
     description:
-        '保存或更新全局记忆。这是你的工作笔记本，用于记住用户的长期信息。\n\n'
-        '三层结构：\n'
-        '• user_profile（用户画像）：用户的身份、职业、技术背景等**稳定事实**。只在用户明确提到时记录，避免推测。\n'
-        '• user_preference（用户倾向）：用户的风格偏好、技术选型倾向等**行为模式**。只在用户表达明确偏好时记录。\n'
-        '• volatile（波动区域）：当前项目、阶段目标、临时关注点等**短期状态**。必须包含明确的过期条件（如"项目 X 完成后删除"、"2024-12 之前有效"）。\n\n'
-        '**维护原则**：\n'
-        '1. 同一 category 下，相同的 key 会自动覆盖（如 "profession" 只保留最新值）\n'
-        '2. 每条记忆控制在 200 字符以内，聚焦核心信息\n'
-        '3. 定期清理波动区域：项目完成、计划结束、临时关注点过时后，主动调用 delete_memory\n'
-        '4. 避免重复：保存前先用 list_memory 检查是否已有类似记忆，优先更新而非新增\n'
-        '5. 只记录明确信息，不要记录"可能"、"也许"、"似乎"的推测',
+        '保存或更新一条跨会话全局记忆。仅在以下情况调用：\n'
+        '1. 用户明确要求“记住”或“保存”；\n'
+        '2. 用户明确表达稳定的身份、职业、技术背景或长期约束；\n'
+        '3. 用户明确表达长期有效的风格、技术或交互偏好；\n'
+        '4. 对后续工作有用的项目状态、目标或约束，并且 content 包含明确的过期条件。\n\n'
+        '分类：user_profile 是稳定事实；user_preference 是长期偏好；volatile 是短期状态。\n'
+        '不要保存一次性任务细节、普通闲聊、助手推测、未经确认的敏感信息，或密码、API Key、访问令牌等秘密。\n'
+        '保存前先用 list_memory 检查已有条目；相同 category + key 表示更新，不要创建重复条目。\n'
+        '每条 content 不超过 200 字符并聚焦核心信息；volatile 必须写明过期条件。',
     schema: <String, Object?>{
       'type': 'object',
       'properties': <String, Object?>{
         'category': <String, Object?>{
           'type': 'string',
           'enum': <String>['user_profile', 'user_preference', 'volatile'],
-          'description': '记忆分类：user_profile（稳定事实） / user_preference（偏好模式） / volatile（短期状态）',
+          'description':
+              '记忆分类：user_profile（稳定事实） / user_preference（偏好模式） / volatile（短期状态）',
         },
         'key': <String, Object?>{
           'type': 'string',
-          'description': '记忆键，简短的英文标识符（如 profession, ui_style, project_x）。同一 category 下相同 key 会覆盖旧值。',
+          'description':
+              '记忆键，简短的英文标识符（如 profession, ui_style, project_x）。同一 category 下相同 key 会覆盖旧值。',
         },
         'content': <String, Object?>{
           'type': 'string',
@@ -83,7 +83,9 @@ class SaveMemoryTool extends Tool {
     }
 
     if (content.length > 200) {
-      return ToolResult.error('content 不能超过 200 字符，当前 ${content.length} 字符。请精简核心信息。');
+      return ToolResult.error(
+        'content 不能超过 200 字符，当前 ${content.length} 字符。请精简核心信息。',
+      );
     }
 
     if (context.token.isCancelled) return ToolResult.cancelled();
@@ -94,9 +96,19 @@ class SaveMemoryTool extends Tool {
     }
 
     final DateTime now = DateTime.now();
-    final MemoryRecord? existing = await storage.readMemory(
-      '$category-$key',
-    ); // 先尝试按固定 ID 读
+    final List<MemorySummary> summaries = await storage.listMemories(
+      category: category,
+    );
+    MemorySummary? existingSummary;
+    for (final MemorySummary summary in summaries) {
+      if (summary.key == key) {
+        existingSummary = summary;
+        break;
+      }
+    }
+    final MemoryRecord? existing = existingSummary == null
+        ? null
+        : await storage.readMemory(existingSummary.id);
 
     final MemoryRecord memory = MemoryRecord(
       id: existing?.id ?? Ulid.generate(),
@@ -285,14 +297,14 @@ class DeleteMemoryTool extends Tool {
   ToolDefinition get definition => const ToolDefinition(
     name: 'delete_memory',
     description:
-        '删除一条记忆。主要用于清理 volatile 区域的过期内容。\n\n'
-        '**何时删除**：\n'
-        '• volatile 记忆的过期条件满足时（如项目完成、计划结束）\n'
-        '• 用户明确要求忘记某项信息\n'
-        '• 发现重复或错误的记忆\n\n'
-        '**不要删除**：\n'
-        '• user_profile 和 user_preference（除非用户明确要求）\n'
-        '• 仍然有效的信息（即使暂时用不到）',
+        '删除一条全局记忆，用于维护你的记忆小本本。先用 list_memory 找到准确 ID。\n\n'
+        '可以自主删除：\n'
+        '• volatile 记忆已满足过期条件；\n'
+        '• 记忆与已确认事实不符；\n'
+        '• 记忆内容重复；\n'
+        '• 记忆放在了错误分类中（例如把短期状态放入 user_profile）；\n'
+        '• 用户明确要求忘记某项信息。\n\n'
+        '不要因为信息暂时用不到就删除仍然有效的记忆。发现分类错误时，删除后如有必要用 save_memory 在正确分类保存修正版。',
     schema: <String, Object?>{
       'type': 'object',
       'properties': <String, Object?>{

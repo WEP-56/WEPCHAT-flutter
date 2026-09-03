@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../state/app_scope.dart';
 import '../state/app_settings.dart';
@@ -11,6 +14,8 @@ import '../ui/shell/app_shell.dart';
 import '../ui/shell/window_title_bar.dart';
 import 'app_bootstrap.dart';
 import 'app_nav.dart';
+import 'update_service.dart';
+import '../ui/update_dialog.dart';
 
 /// 应用根组件：持有全局状态对象，构建主题与外壳。
 class WepChatApp extends StatefulWidget {
@@ -35,6 +40,14 @@ class _WepChatAppState extends State<WepChatApp> {
   final DesktopShellController _desktopShell = DesktopShellController();
   late final GlobalKey<NavigatorState> _navigatorKey =
       widget.navigatorKey ?? GlobalKey<NavigatorState>();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_checkForUpdateOnStartup());
+    });
+  }
 
   @override
   void dispose() {
@@ -105,6 +118,33 @@ class _WepChatAppState extends State<WepChatApp> {
       throw StateError('桌面标题栏无法访问 Navigator');
     }
     AppNav.openSettings(context);
+  }
+
+  Future<void> _checkForUpdateOnStartup() async {
+    if (!_settings.autoCheckUpdates) return;
+
+    try {
+      final PackageInfo info = await PackageInfo.fromPlatform();
+      final UpdateService service = UpdateService();
+      final UpdateCheckResult result;
+      try {
+        result = await service.check(info.version);
+      } finally {
+        service.dispose();
+      }
+
+      if (!mounted || !result.hasUpdate) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final BuildContext? context = _navigatorKey.currentContext;
+        if (context != null) {
+          unawaited(showReleaseUpdateDialog(context, result.release!));
+        }
+      });
+    } on Object {
+      // 启动时检查必须静默失败，不能打断用户进入应用。
+      return;
+    }
   }
 }
 

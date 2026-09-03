@@ -80,6 +80,31 @@ void main() {
       expect(memories.first.summary, contains('丰富视觉效果'));
     });
 
+    test('更新时保留原记忆 ID', () async {
+      await tool.execute(
+        <String, Object?>{
+          'category': 'user_profile',
+          'key': 'profession',
+          'content': '前端开发工程师',
+        },
+        context,
+      );
+      final String id = (await storage.listMemories()).single.id;
+
+      await tool.execute(
+        <String, Object?>{
+          'category': 'user_profile',
+          'key': 'profession',
+          'content': '全栈开发工程师',
+        },
+        context,
+      );
+
+      final List<MemorySummary> memories = await storage.listMemories();
+      expect(memories.single.id, id);
+      expect(memories.single.summary, contains('全栈开发工程师'));
+    });
+
     test('拒绝无效 category', () async {
       final ToolResult result = await tool.execute(
         <String, Object?>{
