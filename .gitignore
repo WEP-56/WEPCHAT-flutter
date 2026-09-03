@@ -45,3 +45,8 @@ app.*.map.json
 /android/app/release
 
 example/
+
+# Android release signing material (never commit private keys or passwords)
+/android/key.properties
+/android/release-credentials.txt
+/android/keystore/*.jks
