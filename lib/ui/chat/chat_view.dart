@@ -51,7 +51,11 @@ class _ChatViewState extends State<ChatView> {
   /// 往上翻两行看历史就会被拽回去。
   static const double _kFollowSlack = 120;
 
-  void _scheduleScrollToBottom(ChatSession session, bool generating) {
+  void _scheduleScrollToBottom(
+    ChatSession session,
+    bool generating,
+    bool keyboardVisible,
+  ) {
     // 在 build 里读位置：此刻 position 还是上一帧的布局结果，所以能判断
     // 「新内容进来之前用户是不是贴着底部」。放到 postFrame 里读就晚了——
     // 那时 maxScrollExtent 已经被新内容撑大，看起来永远像是离底很远。
@@ -61,7 +65,7 @@ class _ChatViewState extends State<ChatView> {
             _kFollowSlack;
 
     final String signature =
-        '${session.id}|${session.messages.length}|$generating';
+        '${session.id}|${session.messages.length}|$generating|$keyboardVisible';
     final bool changed = signature != _signature;
     // 生成中即使 signature 不变也要跟：流式文字在同一条消息里长，
     // 消息数不动，光看 signature 是看不出内容变多了的。
@@ -115,7 +119,11 @@ class _ChatViewState extends State<ChatView> {
       listenable: store,
       builder: (BuildContext context, Widget? _) {
         final ChatSession session = store.active;
-        _scheduleScrollToBottom(session, store.isGenerating);
+        _scheduleScrollToBottom(
+          session,
+          store.isGenerating,
+          MediaQuery.viewInsetsOf(context).bottom > 0,
+        );
         _showNotice(store);
 
         return Container(
