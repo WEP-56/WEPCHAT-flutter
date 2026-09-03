@@ -1,7 +1,7 @@
 name: wepchat
 description: "WePChat — 轻量 LLM 聊天客户端（Android / Windows）"
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.0.2+2
 
 environment:
   sdk: ^3.11.5
