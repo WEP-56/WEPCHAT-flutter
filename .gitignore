@@ -60,6 +60,7 @@ image*.png
 /android/key.properties
 /android/release-credentials.txt
 /android/keystore/*.jks
+keystore_base64.txt
 
 # User data and runtime files (don't commit user's database or workspaces)
 *.db
