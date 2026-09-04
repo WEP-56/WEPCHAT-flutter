@@ -4,6 +4,7 @@ import 'dart:convert';
 import '../../core/cancellation_token.dart';
 import '../../core/errors.dart';
 import '../http_transport.dart';
+import '../provider_headers.dart';
 import '../messages.dart';
 import '../provider_api.dart';
 import '../sse.dart';
@@ -16,13 +17,16 @@ class OpenAiResponsesApi extends ProviderApi {
   OpenAiResponsesApi({
     required String apiKey,
     String baseUrl = 'https://api.openai.com/v1',
+    Map<String, String> customHeaders = const <String, String>{},
     StreamPoster? poster,
   }) : _apiKey = apiKey,
        _baseUrl = _trimTrailingSlash(baseUrl),
+       _customHeaders = customHeaders,
        _post = poster ?? postStreaming;
 
   final String _apiKey;
   final String _baseUrl;
+  final Map<String, String> _customHeaders;
   final StreamPoster _post;
 
   @override
@@ -41,10 +45,13 @@ class OpenAiResponsesApi extends ProviderApi {
     try {
       final StreamedBody body = await _post(
         url: Uri.parse('$_baseUrl/responses'),
-        headers: <String, String>{
-          'content-type': 'application/json',
-          'authorization': 'Bearer $_apiKey',
-        },
+        headers: buildProviderHeaders(
+          defaults: <String, String>{
+            'content-type': 'application/json',
+            'authorization': 'Bearer $_apiKey',
+          },
+          custom: _customHeaders,
+        ),
         body: buildResponsesRequest(request),
         token: token,
       );

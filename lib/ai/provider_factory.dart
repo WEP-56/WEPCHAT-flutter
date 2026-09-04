@@ -37,14 +37,17 @@ ProviderApi createProviderApi({
     ApiKind.anthropicMessages => AnthropicApi(
       apiKey: config.apiKey,
       baseUrl: config.baseUrl,
+      customHeaders: config.customHeaders,
     ),
     ApiKind.openaiCompletions => OpenAiCompletionsApi(
       apiKey: config.apiKey,
       baseUrl: config.baseUrl,
+      customHeaders: config.customHeaders,
     ),
     ApiKind.openaiResponses => OpenAiResponsesApi(
       apiKey: config.apiKey,
       baseUrl: config.baseUrl,
+      customHeaders: config.customHeaders,
     ),
   };
 }

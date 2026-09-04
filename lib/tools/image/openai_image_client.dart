@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import '../../core/cancellation_token.dart';
 import '../../core/errors.dart';
 import '../../core/redact.dart';
+import '../../ai/provider_headers.dart';
 
 class OpenAiImageResult {
   const OpenAiImageResult(this.images);
@@ -14,9 +15,14 @@ class OpenAiImageResult {
 }
 
 class OpenAiImageClient {
-  OpenAiImageClient({required this.apiKey, required this.baseUrl});
+  OpenAiImageClient({
+    required this.apiKey,
+    required this.baseUrl,
+    this.customHeaders = const <String, String>{},
+  });
   final String apiKey;
   final String baseUrl;
+  final Map<String, String> customHeaders;
 
   Future<OpenAiImageResult> generate({
     required String model,
@@ -52,7 +58,12 @@ class OpenAiImageClient {
               'POST',
               Uri.parse('${_trim(baseUrl)}/images/edits'),
             )
-            ..headers['authorization'] = 'Bearer $apiKey'
+            ..headers.addAll(
+              buildProviderHeaders(
+                defaults: <String, String>{'authorization': 'Bearer $apiKey'},
+                custom: customHeaders,
+              ),
+            )
             ..fields['model'] = model
             ..fields['prompt'] = prompt
             ..fields['response_format'] = 'b64_json';
@@ -92,10 +103,13 @@ class OpenAiImageClient {
       token.throwIfCancelled();
       final http.Response response = await client.post(
         Uri.parse('${_trim(baseUrl)}$path'),
-        headers: <String, String>{
-          'authorization': 'Bearer $apiKey',
-          'content-type': 'application/json',
-        },
+        headers: buildProviderHeaders(
+          defaults: <String, String>{
+            'authorization': 'Bearer $apiKey',
+            'content-type': 'application/json',
+          },
+          custom: customHeaders,
+        ),
         body: jsonEncode(body),
       );
       if (response.statusCode < 200 || response.statusCode >= 300)

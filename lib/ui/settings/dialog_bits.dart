@@ -31,6 +31,7 @@ class LabeledField extends StatelessWidget {
     this.mono = false,
     this.numeric = false,
     this.autofocus = false,
+    this.onChanged,
     this.onSubmitted,
   });
 
@@ -47,6 +48,7 @@ class LabeledField extends StatelessWidget {
   final bool mono;
   final bool numeric;
   final bool autofocus;
+  final ValueChanged<String>? onChanged;
   final ValueChanged<String>? onSubmitted;
 
   @override
@@ -88,6 +90,7 @@ class LabeledField extends StatelessWidget {
               ),
               border: const OutlineInputBorder(),
             ),
+            onChanged: onChanged,
             onSubmitted: onSubmitted,
           ),
         ],

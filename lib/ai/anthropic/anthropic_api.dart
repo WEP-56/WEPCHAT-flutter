@@ -4,6 +4,7 @@ import 'dart:convert';
 import '../../core/cancellation_token.dart';
 import '../../core/errors.dart';
 import '../http_transport.dart';
+import '../provider_headers.dart';
 import '../messages.dart';
 import '../provider_api.dart';
 import '../sse.dart';
@@ -15,13 +16,16 @@ class AnthropicApi extends ProviderApi {
   AnthropicApi({
     required String apiKey,
     String baseUrl = 'https://api.anthropic.com',
+    Map<String, String> customHeaders = const <String, String>{},
     StreamPoster? poster,
   }) : _apiKey = apiKey,
        _baseUrl = baseUrl,
+       _customHeaders = customHeaders,
        _post = poster ?? postStreaming;
 
   final String _apiKey;
   final String _baseUrl;
+  final Map<String, String> _customHeaders;
 
   /// 注入点：测试塞录好的 SSE，生产用 [postStreaming]。
   final StreamPoster _post;
@@ -48,11 +52,14 @@ class AnthropicApi extends ProviderApi {
     try {
       final StreamedBody body = await _post(
         url: Uri.parse('$_baseUrl/v1/messages'),
-        headers: <String, String>{
-          'content-type': 'application/json',
-          'x-api-key': _apiKey,
-          'anthropic-version': _apiVersion,
-        },
+        headers: buildProviderHeaders(
+          defaults: <String, String>{
+            'content-type': 'application/json',
+            'x-api-key': _apiKey,
+            'anthropic-version': _apiVersion,
+          },
+          custom: _customHeaders,
+        ),
         body: buildAnthropicRequest(request),
         token: token,
       );

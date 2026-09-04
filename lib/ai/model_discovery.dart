@@ -18,6 +18,7 @@ import 'model_catalog.dart';
 import 'provider_api.dart';
 import 'provider_config.dart';
 import 'provider_factory.dart';
+import 'provider_headers.dart';
 
 /// 探测超时。设置页里的动作要么很快成功要么快点报错，
 /// 让用户对着转圈等 30 秒不如让他早点看到错误。
@@ -194,7 +195,7 @@ Map<String, String> _headersFor(ProviderConfig config) {
   // anthropic 用 x-api-key + 版本头，其余用 Bearer。这个差异在
   // 适配器里也有一份，但那边是流式 POST 的头，这里是 GET /models 的头，
   // 抽一个共享函数要把两处的差异都参数化，反而更绕。
-  return switch (config.apiKind) {
+  final Map<String, String> defaults = switch (config.apiKind) {
     ApiKind.anthropicMessages => <String, String>{
       'x-api-key': config.apiKey,
       'anthropic-version': '2023-06-01',
@@ -203,6 +204,7 @@ Map<String, String> _headersFor(ProviderConfig config) {
       'authorization': 'Bearer ${config.apiKey}',
     },
   };
+  return buildProviderHeaders(defaults: defaults, custom: config.customHeaders);
 }
 
 String _messageOf(String body) {

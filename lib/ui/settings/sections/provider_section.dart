@@ -117,7 +117,8 @@ class _ProviderRow extends StatelessWidget {
             children: <Widget>[
               Expanded(
                 child: Text(
-                  '${config.maskedKey} · ${config.baseUrl}',
+                  '${config.maskedKey} · ${config.baseUrl}'
+                  '${config.customHeaders.isEmpty ? '' : ' · 请求头 ${config.customHeaders.length}'}',
                   overflow: TextOverflow.ellipsis,
                   style: AppFonts.mono(size: 10.5, color: palette.text3),
                 ),

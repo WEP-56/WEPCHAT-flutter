@@ -1,6 +1,7 @@
 /// provider 配置（实施 TODO §10-4、§13.4）。
 ///
-/// 用户视角只有四个字段：**名称、API 类别、baseUrl、Key**。一个 provider 是
+/// 用户视角的基础字段是**名称、API 类别、baseUrl、Key**，高级设置可补充请求头。
+/// 一个 provider 是
 /// "一个端点 + 一把钥匙 + 一种协议"，不是"一个厂商"——中转站、本地 vLLM、
 /// 官方端点在这里是同一种东西。
 ///
@@ -9,6 +10,7 @@
 library;
 
 import '../core/ulid.dart';
+import 'provider_headers.dart';
 
 /// API 协议种类。协议要求支持三种（§4）。
 enum ApiKind {
@@ -47,6 +49,7 @@ class ProviderConfig {
     required this.apiKind,
     required this.baseUrl,
     this.apiKey = '',
+    this.customHeaders = const <String, String>{},
     this.builtin = false,
   });
 
@@ -56,6 +59,7 @@ class ProviderConfig {
     required ApiKind apiKind,
     required String baseUrl,
     String apiKey = '',
+    Map<String, String> customHeaders = const <String, String>{},
   }) {
     return ProviderConfig(
       id: Ulid.generate(),
@@ -63,6 +67,7 @@ class ProviderConfig {
       apiKind: apiKind,
       baseUrl: baseUrl,
       apiKey: apiKey,
+      customHeaders: customHeaders,
     );
   }
 
@@ -80,6 +85,9 @@ class ProviderConfig {
   ///
   /// **界面永不显示明文**，只显示 [maskedKey]；日志走 `redact()`。
   final String apiKey;
+
+  /// 用户为中转站或兼容网关补充的请求头。
+  final Map<String, String> customHeaders;
 
   /// 首次启动时由种子列表提供的 provider。
   ///
@@ -104,6 +112,7 @@ class ProviderConfig {
     ApiKind? apiKind,
     String? baseUrl,
     String? apiKey,
+    Map<String, String>? customHeaders,
   }) {
     return ProviderConfig(
       id: id,
@@ -111,6 +120,7 @@ class ProviderConfig {
       apiKind: apiKind ?? this.apiKind,
       baseUrl: baseUrl ?? this.baseUrl,
       apiKey: apiKey ?? this.apiKey,
+      customHeaders: customHeaders ?? this.customHeaders,
       builtin: builtin,
     );
   }
@@ -121,6 +131,7 @@ class ProviderConfig {
     'apiKind': apiKind.name,
     'baseUrl': baseUrl,
     'apiKey': apiKey,
+    if (customHeaders.isNotEmpty) 'customHeaders': customHeaders,
     'builtin': builtin,
   };
 
@@ -141,6 +152,7 @@ class ProviderConfig {
       apiKind: kind,
       baseUrl: baseUrl,
       apiKey: raw['apiKey'] as String? ?? '',
+      customHeaders: normalizeProviderHeaders(raw['customHeaders']),
       builtin: raw['builtin'] as bool? ?? false,
     );
   }

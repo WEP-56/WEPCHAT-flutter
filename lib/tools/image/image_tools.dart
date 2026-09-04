@@ -105,8 +105,12 @@ class GenImageTool extends _ImageToolBase {
     ProviderConfig provider,
     ToolContext context,
     Map<String, Object?> args,
-  ) => OpenAiImageClient(apiKey: provider.apiKey, baseUrl: provider.baseUrl)
-      .generate(
+  ) =>
+      OpenAiImageClient(
+        apiKey: provider.apiKey,
+        baseUrl: provider.baseUrl,
+        customHeaders: provider.customHeaders,
+      ).generate(
         model: model.id,
         prompt: args['prompt'] as String,
         size: args['size'] as String?,
@@ -166,6 +170,7 @@ class EditImageTool extends _ImageToolBase {
     return OpenAiImageClient(
       apiKey: provider.apiKey,
       baseUrl: provider.baseUrl,
+      customHeaders: provider.customHeaders,
     ).edit(
       model: model.id,
       image: file,

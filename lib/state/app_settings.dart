@@ -465,12 +465,14 @@ class AppSettings extends ChangeNotifier {
     required ApiKind apiKind,
     required String baseUrl,
     String apiKey = '',
+    Map<String, String> customHeaders = const <String, String>{},
   }) {
     final ProviderConfig config = ProviderConfig.create(
       displayName: displayName.trim(),
       apiKind: apiKind,
       baseUrl: baseUrl.trim(),
       apiKey: apiKey.trim(),
+      customHeaders: customHeaders,
     );
     _providers = <ProviderConfig>[..._providers, config];
     _changed();
@@ -485,6 +487,7 @@ class AppSettings extends ChangeNotifier {
     ApiKind? apiKind,
     String? baseUrl,
     String? apiKey,
+    Map<String, String>? customHeaders,
   }) {
     final int index = _providers.indexWhere((ProviderConfig p) => p.id == id);
     if (index < 0) throw ArgumentError.value(id, 'id', '未知的 provider');
@@ -495,11 +498,17 @@ class AppSettings extends ChangeNotifier {
       apiKind: apiKind,
       baseUrl: baseUrl?.trim(),
       apiKey: apiKey?.trim(),
+      customHeaders: customHeaders,
     );
     if (next.displayName == current.displayName &&
         next.apiKind == current.apiKind &&
         next.baseUrl == current.baseUrl &&
-        next.apiKey == current.apiKey) {
+        next.apiKey == current.apiKey &&
+        next.customHeaders.length == current.customHeaders.length &&
+        next.customHeaders.entries.every(
+          (MapEntry<String, String> e) =>
+              current.customHeaders[e.key] == e.value,
+        )) {
       return;
     }
     _providers = <ProviderConfig>[..._providers]..[index] = next;
@@ -716,9 +725,9 @@ class AppSettings extends ChangeNotifier {
       json['searchProviders'],
     );
     if (models.any(
-          (ModelSpec m) =>
-              providers.every((ProviderConfig p) => p.id != m.providerId),
-        )) {
+      (ModelSpec m) =>
+          providers.every((ProviderConfig p) => p.id != m.providerId),
+    )) {
       throw const FormatException('备份中的提供商或模型配置无效');
     }
     _providers = providers;
