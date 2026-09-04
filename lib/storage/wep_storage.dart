@@ -51,7 +51,7 @@ class WepStorage {
     required String workspaceRoot,
     required String providerId,
     required String modelId,
-    ThinkingLevel thinking = ThinkingLevel.off,
+    ThinkingLevel thinking = ThinkingLevel.low,
   }) async {
     final DateTime now = DateTime.now();
     final SessionRecord session = SessionRecord(

@@ -13,7 +13,7 @@ enum ThinkingFormat {
   /// 模型不支持思考。
   none,
 
-  /// OpenAI o 系列：请求带 `reasoning_effort: low|medium|high`，
+  /// OpenAI reasoning 模型：请求带 `reasoning_effort` 标准等级（low 到 max），
   /// 响应里思考内容不返回（只计入 `reasoning_tokens`）。
   openaiReasoningEffort,
 

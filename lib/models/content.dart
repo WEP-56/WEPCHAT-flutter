@@ -34,6 +34,13 @@ class QuoteBlock extends ContentBlock {
   final String text;
 }
 
+/// 助手的思考摘要。与普通引用分开，界面可以独立展开或收起。
+class ThinkingBlock extends ContentBlock {
+  const ThinkingBlock(this.text);
+
+  final String text;
+}
+
 class TableBlock extends ContentBlock {
   const TableBlock(this.head, this.rows);
 

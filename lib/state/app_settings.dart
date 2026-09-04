@@ -9,7 +9,10 @@ import '../ai/provider_config.dart';
 import '../mock/mock_settings.dart';
 import '../models/settings.dart';
 import '../platform/settings_store.dart';
+import '../theme/fonts.dart';
 import '../theme/palette.dart';
+
+part 'app_settings_parsing.dart';
 
 /// 全局设置，落在 App 私有目录的 settings.json 里（实施 TODO §13.4）。
 ///
@@ -28,6 +31,7 @@ class AppSettings extends ChangeNotifier {
     required String? imageEditModelKey,
     required ThemeMode themeMode,
     required AppAccent accent,
+    required AppFontSize fontSize,
     required MemoryMode memoryMode,
     required String customSystemPrompt,
     required bool autoCheckUpdates,
@@ -46,6 +50,7 @@ class AppSettings extends ChangeNotifier {
        _imageEditModelKey = imageEditModelKey,
        _themeMode = themeMode,
        _accent = accent,
+       _fontSize = fontSize,
        _memoryMode = memoryMode,
        _customSystemPrompt = customSystemPrompt,
        _autoCheckUpdates = autoCheckUpdates,
@@ -84,6 +89,12 @@ class AppSettings extends ChangeNotifier {
         AppAccent.values,
         AppAccent.x,
         (AppAccent v) => v.name,
+      ),
+      fontSize: _readEnum(
+        json['fontSize'],
+        AppFontSize.values,
+        AppFontSize.medium,
+        (AppFontSize v) => v.name,
       ),
       memoryMode: _readEnum(
         json['memoryMode'],
@@ -129,6 +140,7 @@ class AppSettings extends ChangeNotifier {
 
   ThemeMode _themeMode;
   AppAccent _accent;
+  AppFontSize _fontSize;
   MemoryMode _memoryMode;
   String _customSystemPrompt;
   bool _autoCheckUpdates;
@@ -155,6 +167,7 @@ class AppSettings extends ChangeNotifier {
 
   ThemeMode get themeMode => _themeMode;
   AppAccent get accent => _accent;
+  AppFontSize get fontSize => _fontSize;
   MemoryMode get memoryMode => _memoryMode;
   String get customSystemPrompt => _customSystemPrompt;
   bool get autoCheckUpdates => _autoCheckUpdates;
@@ -291,6 +304,12 @@ class AppSettings extends ChangeNotifier {
   void setAccent(AppAccent accent) {
     if (_accent == accent) return;
     _accent = accent;
+    _changed();
+  }
+
+  void setFontSize(AppFontSize fontSize) {
+    if (_fontSize == fontSize) return;
+    _fontSize = fontSize;
     _changed();
   }
 
@@ -501,6 +520,7 @@ class AppSettings extends ChangeNotifier {
 
   /// 加一个模型。同 provider 下 id 重复时忽略——
   /// 用户在 `/models` 拉取之后又手动加同一个是常见操作，不该出现两条。
+  /// OpenAI / Anthropic provider 的模型默认开启思考，用户可在详情里关闭。
   ModelSpec? addModel({
     required String providerId,
     required String modelId,
@@ -515,13 +535,21 @@ class AppSettings extends ChangeNotifier {
       throw ArgumentError.value(providerId, 'providerId', '未知的 provider');
     }
 
+    final ProviderConfig provider = providerOf(providerId)!;
+    final ModelCompat effectiveCompat = compat.thinking == ThinkingFormat.none
+        ? compat.copyWith(
+            thinking: provider.apiKind == ApiKind.anthropicMessages
+                ? ThinkingFormat.anthropicThinking
+                : ThinkingFormat.openaiReasoningEffort,
+          )
+        : compat;
     final ModelSpec model = ModelSpec(
       id: trimmed,
       providerId: providerId,
       displayName: displayName?.trim(),
       contextWindow: contextWindow,
       maxOutputTokens: maxOutputTokens,
-      compat: compat,
+      compat: effectiveCompat,
     );
     if (modelByKey(model.key) != null) return null;
 
@@ -538,6 +566,7 @@ class AppSettings extends ChangeNotifier {
     if (providerOf(providerId) == null) {
       throw ArgumentError.value(providerId, 'providerId', '未知的 provider');
     }
+    final ProviderConfig provider = providerOf(providerId)!;
 
     final Set<String> existing = _models.map((ModelSpec m) => m.key).toSet();
     final List<ModelSpec> added = <ModelSpec>[];
@@ -547,7 +576,17 @@ class AppSettings extends ChangeNotifier {
       if (id.isEmpty) continue;
       final String key = '$providerId/$id';
       if (!existing.add(key)) continue;
-      added.add(ModelSpec(id: id, providerId: providerId));
+      added.add(
+        ModelSpec(
+          id: id,
+          providerId: providerId,
+          compat: ModelCompat(
+            thinking: provider.apiKind == ApiKind.anthropicMessages
+                ? ThinkingFormat.anthropicThinking
+                : ThinkingFormat.openaiReasoningEffort,
+          ),
+        ),
+      );
     }
 
     if (added.isEmpty) return 0;
@@ -655,6 +694,7 @@ class AppSettings extends ChangeNotifier {
     'workspaceRoot': _workspaceRoot,
     'themeMode': _themeMode.name,
     'accent': _accent.name,
+    'fontSize': _fontSize.name,
   };
 
   @override
@@ -663,104 +703,4 @@ class AppSettings extends ChangeNotifier {
     super.dispose();
   }
 
-  /// 磁盘是权威，首次启动（没有 providers 键）才用种子。
-  ///
-  /// 这个方向是有意的：用户删掉一个内置 provider 之后不该在下次启动时
-  /// 复活。区分"首启"和"用户删空了"靠键存不存在，不靠列表空不空——
-  /// 后者会让"我就是想一个都不要"变成永远删不掉。
-  static List<ProviderConfig> _readProviders(Object? raw) {
-    if (raw is! List) return List<ProviderConfig>.of(kSeedProviders);
-
-    final List<ProviderConfig> out = <ProviderConfig>[];
-    for (final Object? item in raw) {
-      final ProviderConfig? parsed = ProviderConfig.fromJson(item);
-      if (parsed == null) continue; // 坏掉的一项跳过，不让它带走其他项
-      out.add(parsed);
-    }
-    return out;
-  }
-
-  static List<SearchProviderConfig> _readSearchProviders(
-    Object? raw, {
-    String? legacyId,
-    String? legacyKey,
-    String? legacyBaseUrl,
-  }) {
-    if (raw is List) {
-      final List<SearchProviderConfig> out = <SearchProviderConfig>[];
-      for (final Object? item in raw) {
-        final SearchProviderConfig? parsed = SearchProviderConfig.fromJson(
-          item,
-        );
-        if (parsed != null) out.add(parsed);
-      }
-      if (out.isNotEmpty) return out;
-    }
-    final List<SearchProviderConfig> seeded = <SearchProviderConfig>[
-      for (final SearchProviderConfig preset in kSearchProviderPresets)
-        preset.id == (legacyId ?? 'tavily')
-            ? preset.copyWith(
-                apiKey: legacyKey ?? '',
-                baseUrl: (legacyBaseUrl == null || legacyBaseUrl.isEmpty)
-                    ? preset.baseUrl
-                    : legacyBaseUrl,
-              )
-            : preset,
-    ];
-    return seeded;
-  }
-
-  static List<ModelSpec> _readModels(Object? raw) {
-    if (raw is! List) return List<ModelSpec>.of(kSeedModels);
-
-    final List<ModelSpec> out = <ModelSpec>[];
-    for (final Object? item in raw) {
-      final ModelSpec? parsed = ModelSpec.fromJson(item);
-      if (parsed == null) continue;
-      out.add(parsed);
-    }
-    return out;
-  }
-
-  static Map<String, ToolPermission> _readPermissions(Object? raw) {
-    final Map<String, ToolPermission> out = <String, ToolPermission>{
-      for (final ToolPermissionSpec spec in kToolPermissionSpecs)
-        spec.id: spec.defaultPermission,
-    };
-    if (raw is! Map<String, Object?>) return out;
-
-    for (final MapEntry<String, Object?> entry in raw.entries) {
-      // 只认已声明的工具：磁盘上可能留着已经删掉的工具的权限，
-      // 那些不该复活成一个 permissionOf 查不到的键。
-      if (!out.containsKey(entry.key)) continue;
-      final ToolPermission? value = _enumByName(
-        entry.value,
-        ToolPermission.values,
-        (ToolPermission v) => v.name,
-      );
-      if (value != null) out[entry.key] = value;
-    }
-    return out;
-  }
-
-  static T _readEnum<T>(
-    Object? raw,
-    List<T> values,
-    T fallback,
-    String Function(T) nameOf,
-  ) {
-    return _enumByName(raw, values, nameOf) ?? fallback;
-  }
-
-  static T? _enumByName<T>(
-    Object? raw,
-    List<T> values,
-    String Function(T) nameOf,
-  ) {
-    if (raw is! String) return null;
-    for (final T value in values) {
-      if (nameOf(value) == raw) return value;
-    }
-    return null;
-  }
 }

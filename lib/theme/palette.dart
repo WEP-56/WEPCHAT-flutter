@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 
-/// 强调色方案。对应前端原型的两套主色变量。
+/// 强调色方案。颜色会派生出整套语义色板。
 enum AppAccent {
   x(Color(0xFF1D9BF0), 'X 蓝'),
-  telegram(Color(0xFF2AABEE), 'Telegram 蓝');
+  telegram(Color(0xFF2AABEE), 'Telegram 蓝'),
+  violet(Color(0xFF8B5CF6), '紫罗兰'),
+  green(Color(0xFF10A37F), '薄荷绿'),
+  orange(Color(0xFFF97316), '活力橙');
 
   const AppAccent(this.color, this.label);
 

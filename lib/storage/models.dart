@@ -79,10 +79,13 @@ enum StopReason {
 
 /// 思考档位。`sessions.thinking` 列。
 enum ThinkingLevel {
+  /// 旧版本会话的兼容值。新建会话与界面不再提供关闭思考选项。
   off('off'),
   low('low'),
   medium('medium'),
-  high('high');
+  high('high'),
+  xhigh('xhigh'),
+  max('max');
 
   const ThinkingLevel(this.wire);
 

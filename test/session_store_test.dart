@@ -140,6 +140,12 @@ void main() {
     expect(store.active.model, equals('GPT-5'));
   });
 
+  test('改思考等级', () async {
+    await store.setThinking(store.activeId, ThinkingLevel.max);
+
+    expect(store.active.thinking, ThinkingLevel.max);
+  });
+
   test('空标题重命名被忽略', () async {
     await store.renameSession(store.activeId, '   ');
 

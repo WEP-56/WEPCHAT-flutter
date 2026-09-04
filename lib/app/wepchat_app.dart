@@ -8,6 +8,7 @@ import '../state/app_scope.dart';
 import '../state/app_settings.dart';
 import '../state/session_store.dart';
 import '../theme/app_theme.dart';
+import '../theme/fonts.dart';
 import '../theme/palette.dart';
 import '../ui/shell/desktop_shell_controller.dart';
 import '../ui/shell/app_shell.dart';
@@ -66,7 +67,12 @@ class _WepChatAppState extends State<WepChatApp> {
     );
   }
 
-  Widget _buildApp(BuildContext context, ThemeMode mode, AppAccent accent) {
+  Widget _buildApp(
+    BuildContext context,
+    ThemeMode mode,
+    AppAccent accent,
+    AppFontSize fontSize,
+  ) {
     final ThemeData light = WepTheme.build(Brightness.light, accent);
     final ThemeData dark = WepTheme.build(Brightness.dark, accent);
 
@@ -98,13 +104,18 @@ class _WepChatAppState extends State<WepChatApp> {
                     statusBarColor: Colors.transparent,
                     systemNavigationBarColor: Colors.transparent,
                   ),
-          child: WindowFrame(
-            palette: resolved.extension<AppPalette>()!,
-            shellController: _desktopShell,
-            onNewSession: () =>
-                _sessions.createSession(model: _settings.defaultModelKey),
-            onOpenSettings: _openSettings,
-            child: child,
+          child: MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: TextScaler.linear(fontSize.scale)),
+            child: WindowFrame(
+              palette: resolved.extension<AppPalette>()!,
+              shellController: _desktopShell,
+              onNewSession: () =>
+                  _sessions.createSession(model: _settings.defaultModelKey),
+              onOpenSettings: _openSettings,
+              child: child,
+            ),
           ),
         );
       },
@@ -148,15 +159,20 @@ class _WepChatAppState extends State<WepChatApp> {
   }
 }
 
-/// 只在「主题模式 / 强调色」变化时重建 [MaterialApp]。
+/// 只在外观设置变化时重建 [MaterialApp]。
 ///
 /// 直接用 `ListenableBuilder(listenable: settings)` 会让温度滑杆这类高频设置
-/// 每帧重建整棵树，所以这里自己比对关心的两个字段。
+/// 每帧重建整棵树，所以这里自己比对外观字段。
 class _AppearanceBuilder extends StatefulWidget {
   const _AppearanceBuilder({required this.settings, required this.builder});
 
   final AppSettings settings;
-  final Widget Function(BuildContext context, ThemeMode mode, AppAccent accent)
+  final Widget Function(
+    BuildContext context,
+    ThemeMode mode,
+    AppAccent accent,
+    AppFontSize fontSize,
+  )
   builder;
 
   @override
@@ -166,6 +182,7 @@ class _AppearanceBuilder extends StatefulWidget {
 class _AppearanceBuilderState extends State<_AppearanceBuilder> {
   late ThemeMode _mode = widget.settings.themeMode;
   late AppAccent _accent = widget.settings.accent;
+  late AppFontSize _fontSize = widget.settings.fontSize;
 
   @override
   void initState() {
@@ -182,15 +199,17 @@ class _AppearanceBuilderState extends State<_AppearanceBuilder> {
   void _onSettingsChanged() {
     final ThemeMode mode = widget.settings.themeMode;
     final AppAccent accent = widget.settings.accent;
-    if (mode == _mode && accent == _accent) return;
+    final AppFontSize fontSize = widget.settings.fontSize;
+    if (mode == _mode && accent == _accent && fontSize == _fontSize) return;
     setState(() {
       _mode = mode;
       _accent = accent;
+      _fontSize = fontSize;
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    return widget.builder(context, _mode, _accent);
+    return widget.builder(context, _mode, _accent, _fontSize);
   }
 }

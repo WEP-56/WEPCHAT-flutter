@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../app/responsive.dart';
 import '../../models/chat.dart';
 import '../../models/tool_call.dart';
+import '../../storage/models.dart';
 import '../../state/app_scope.dart';
 import '../../state/session_store.dart';
 import '../../theme/palette.dart';
@@ -148,6 +149,10 @@ class _ChatViewState extends State<ChatView> {
                 ),
               Composer(
                 isGenerating: store.isGenerating,
+                model: context.settings.modelByKey(session.model),
+                thinking: session.thinking,
+                onThinkingChanged: (ThinkingLevel level) =>
+                    store.setThinking(session.id, level),
                 onSend: (String text, List<PendingAttachment> attachments) =>
                     store.sendMessage(text, attachments: attachments),
                 onStop: store.stopGenerating,

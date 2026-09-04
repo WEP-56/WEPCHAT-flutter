@@ -1,5 +1,18 @@
 import 'package:flutter/material.dart';
 
+/// 应用文字缩放档位。通过根部 `MediaQuery.textScaler` 应用，保证显式字号
+/// 和主题字号都能一起调整，而不需要在每个组件里复制一套比例逻辑。
+enum AppFontSize {
+  small(0.9, '小'),
+  medium(1.0, '默认'),
+  large(1.15, '大');
+
+  const AppFontSize(this.scale, this.label);
+
+  final double scale;
+  final String label;
+}
+
 /// 等宽字体的统一入口。
 ///
 /// 原型里直接写 `fontFamily: 'monospace'`，该名字在 Windows 上解析不到，

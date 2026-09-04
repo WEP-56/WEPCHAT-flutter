@@ -66,7 +66,8 @@ class BlockView extends StatelessWidget {
           ),
         ),
         child: InlineText(text, size: 13, color: palette.text2),
-      ),
+        ),
+      ThinkingBlock(:final String text) => _ThinkingBlockView(text: text),
       final TableBlock block => TableBlockView(block: block),
       final CodeBlock block => CodeBlockView(block: block),
       MathBlock(:final String latex) => _MathBlockView(latex: latex),
@@ -75,6 +76,73 @@ class BlockView extends StatelessWidget {
         alt: alt,
       ),
     };
+  }
+}
+
+class _ThinkingBlockView extends StatefulWidget {
+  const _ThinkingBlockView({required this.text});
+
+  final String text;
+
+  @override
+  State<_ThinkingBlockView> createState() => _ThinkingBlockViewState();
+}
+
+class _ThinkingBlockViewState extends State<_ThinkingBlockView> {
+  bool _expanded = true;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppPalette palette = context.palette;
+    return Container(
+      decoration: BoxDecoration(
+        color: palette.bgPanel,
+        border: Border.all(color: palette.border),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          InkWell(
+            onTap: () => setState(() => _expanded = !_expanded),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+              child: Row(
+                children: <Widget>[
+                  Icon(Icons.psychology_outlined, size: 16, color: palette.accent),
+                  const SizedBox(width: 7),
+                  Text(
+                    '思考过程',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: palette.text2,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    _expanded ? '收起' : '展开',
+                    style: TextStyle(fontSize: 11, color: palette.text3),
+                  ),
+                  const SizedBox(width: 3),
+                  Icon(
+                    _expanded ? Icons.expand_less : Icons.expand_more,
+                    size: 16,
+                    color: palette.text3,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (_expanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+              child: InlineText(widget.text, size: 13, color: palette.text2),
+            ),
+        ],
+      ),
+    );
   }
 }
 

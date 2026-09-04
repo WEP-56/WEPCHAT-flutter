@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import '../agent/agent_loop.dart';
 import '../ai/messages.dart' as ai;
 import '../ai/model_catalog.dart';
+import '../ai/model_compat.dart';
 import '../ai/provider_api.dart';
 import '../ai/provider_config.dart';
 import '../ai/provider_factory.dart';
@@ -27,6 +28,8 @@ import '../tools/tool.dart';
 import 'app_settings.dart';
 import 'tool_display.dart';
 import 'turn_runner.dart';
+
+part 'session_projection.dart';
 
 /// 会话列表与当前会话的可变状态，背后是真存储（实施 TODO §9-12、M1、M2）。
 ///
@@ -105,6 +108,8 @@ class SessionStore extends ChangeNotifier {
       workspaceRoot: workspaces.root,
       providerId: _providerFor(model),
       modelId: model,
+      // 新会话默认开启思考；用户仍可在输入框切换到“不支持”。
+      thinking: ThinkingLevel.low,
     );
     workspaces.ensureSession(record.id);
     return record;
@@ -241,6 +246,12 @@ class SessionStore extends ChangeNotifier {
       modelId: model,
     );
     _patch(id, (ChatSession s) => s.copyWith(model: model));
+  }
+
+  /// 调整当前会话的思考档位。档位真正如何映射到请求字段由模型供应商决定。
+  Future<void> setThinking(String id, ThinkingLevel thinking) async {
+    await _storage.changeThinking(id, thinking);
+    _patch(id, (ChatSession s) => s.copyWith(thinking: thinking));
   }
 
   /// 发一条新消息：落库 + 请模型回复。
@@ -424,6 +435,9 @@ class SessionStore extends ChangeNotifier {
     required String runId,
     required CancellationToken token,
   }) async {
+    final ChatSession session = _sessions.firstWhere(
+      (ChatSession s) => s.id == sessionId,
+    );
     final AgentLoop loop = AgentLoop(
       api: api,
       tools: ToolRegistry(kDefaultTools, gate: _gate),
@@ -439,6 +453,7 @@ class SessionStore extends ChangeNotifier {
         temperature: model.compat.supportsTemperature
             ? _settings.temperature
             : null,
+        thinkingBudget: _thinkingBudget(model, session.thinking),
       ),
     );
 
@@ -672,220 +687,6 @@ class SessionStore extends ChangeNotifier {
     return result;
   }
 
-  static ChatSession _toChatSession(
-    SessionRecord record,
-    List<EntryRecord> entries,
-  ) {
-    return ChatSession(
-      id: record.id,
-      title: record.title,
-      group: _groupLabel(record.updatedAt),
-      time: _timeLabel(record.updatedAt),
-      preview: record.preview.isEmpty ? '还没有消息' : record.preview,
-      // 存的是 `ModelSpec.key`（`providerId/modelId`）。界面要显示名字时
-      // 拿这个键去设置里查，查不到就显示键本身——用户删掉了那个模型，
-      // 会话还在，这时显示原始键比显示空白有用。
-      model: record.modelId,
-      // 文件列表由 _reload 单独加载并合并，这里先留空。
-      files: const <WorkspaceFile>[],
-      messages: _toChatMessages(entries),
-    );
-  }
-
-  /// 条目列表 → 气泡列表。
-  ///
-  /// 先跳过被 `truncate` 标记撤回的区间：撤回过的消息不该还留在屏幕上
-  /// （存储设计 §8）。
-  ///
-  /// 工具结果不占独立气泡，而是挂到**紧邻的下一条助手消息**上：那条消息
-  /// 就是模型看完工具结果之后说的话，两者属于同一个动作。没有后继助手
-  /// 消息时（模型只调了工具就被中断）自成一条，否则那次调用在界面上就
-  /// 凭空消失了。
-  static List<ChatMessage> _toChatMessages(List<EntryRecord> entries) {
-    final List<ChatMessage> out = <ChatMessage>[];
-    final List<ToolCall> pending = <ToolCall>[];
-
-    for (final EntryRecord entry in applyTruncations(entries)) {
-      if (entry.type != EntryType.message) continue;
-
-      if (entry.role == EntryRole.toolResult) {
-        pending.add(_toToolCall(entry));
-        continue;
-      }
-
-      final ChatMessage message = _toChatMessage(entry);
-      if (pending.isEmpty || entry.role == EntryRole.user) {
-        // 用户消息不该带上一轮的工具卡片。把攒着的先单独放出去。
-        if (pending.isNotEmpty) {
-          out.add(_toolOnlyMessage(pending));
-          pending.clear();
-        }
-        out.add(message);
-        continue;
-      }
-
-      out.add(message.copyWith(tools: List<ToolCall>.of(pending)));
-      pending.clear();
-    }
-
-    if (pending.isNotEmpty) out.add(_toolOnlyMessage(pending));
-    return out;
-  }
-
-  /// 只有工具卡片、没有正文的一条。
-  static ChatMessage _toolOnlyMessage(List<ToolCall> tools) {
-    return ChatMessage(
-      id: tools.first.id,
-      role: ChatRole.toolResult,
-      time: '',
-      tools: List<ToolCall>.of(tools),
-    );
-  }
-
-  /// 落库的工具结果 → 卡片。
-  ///
-  /// 和执行时那张卡片走同一套 `toolKindOf` / `toolTitleOf`
-  /// （`tool_display.dart`），刷新前后长得一样。
-  static ToolCall _toToolCall(EntryRecord entry) {
-    final String name = entry.payload['name'] as String? ?? '未知工具';
-    final String content = entry.payload['content'] as String? ?? '';
-    final String outcome = entry.payload['outcome'] as String? ?? 'ok';
-    final Object? rawArgs = entry.payload['arguments'];
-    final Map<String, Object?> arguments = rawArgs is Map
-        ? <String, Object?>{
-            for (final MapEntry<Object?, Object?> item in rawArgs.entries)
-              if (item.key is String) item.key as String: item.value,
-          }
-        : const <String, Object?>{};
-    final ToolOutcome parsedOutcome = switch (outcome) {
-      'failed' => ToolOutcome.failed,
-      'cancelled' => ToolOutcome.cancelled,
-      'denied' => ToolOutcome.denied,
-      _ => ToolOutcome.ok,
-    };
-    final Object? rawUi = entry.payload['ui'];
-    final Map<String, Object?>? ui = rawUi is Map
-        ? <String, Object?>{
-            for (final MapEntry<Object?, Object?> item in rawUi.entries)
-              if (item.key is String) item.key as String: item.value,
-          }
-        : null;
-    return restoredToolCall(
-      id: entry.id,
-      name: name,
-      arguments: arguments,
-      content: content,
-      outcome: parsedOutcome,
-      uiPayload: ui,
-    );
-  }
-
-  static ChatMessage _toChatMessage(EntryRecord entry) {
-    final bool isUser = entry.role == EntryRole.user;
-    final String text = entry.payload['text'] as String? ?? '';
-    final int? elapsedMs = entry.payload['elapsedMs'] as int?;
-    final List<Attachment> attachments = <Attachment>[];
-    final Object? rawAttachments = entry.payload['attachments'];
-    if (rawAttachments is List) {
-      for (final Object? raw in rawAttachments) {
-        if (raw is! Map<String, Object?> || raw['name'] is! String) continue;
-        final String name = raw['name'] as String;
-        final String mime = raw['mimeType'] as String? ?? '';
-        final FileKind kind = mime.startsWith('image/')
-            ? FileKind.png
-            : FileKind.txt;
-        attachments.add(Attachment(name: name, size: '附件', kind: kind));
-      }
-    }
-
-    return ChatMessage(
-      id: entry.id,
-      role: isUser ? ChatRole.user : ChatRole.assistant,
-      time: _timeLabel(entry.createdAt),
-      seq: entry.seq,
-      attachments: attachments,
-      // 原始文本原样留一份：复制和编辑要的是 Markdown 源码，从 blocks
-      // 反推回去是有损的。
-      rawText: text,
-      usage: isUser ? null : _usageOf(entry),
-      elapsed: elapsedMs == null ? null : Duration(milliseconds: elapsedMs),
-      // 用户消息不解析 Markdown：用户打的 `-` 开头是破折号，不是列表。
-      blocks: isUser
-          ? (text.isEmpty
-                ? const <ContentBlock>[]
-                : <ContentBlock>[ParagraphBlock(text)])
-          : _blocksOf(
-              text: text,
-              thinking: entry.payload['thinking'] as String? ?? '',
-              error: entry.payload['error'] as String?,
-            ),
-    );
-  }
-
-  /// 落库的用量 → 操作栏用量。
-  ///
-  /// 存储层的字段全是 nullable（不是模型响应的条目就全空），展示层不区分
-  /// "没有"和"是 0"，一律折成 0。思考 token 没有独立列，在 payload 里
-  /// （见 `TurnRunner._persistAssistant`）。
-  static MessageUsage? _usageOf(EntryRecord entry) {
-    final TokenUsage usage = entry.usage;
-    final int reasoning = entry.payload['reasoningTokens'] as int? ?? 0;
-    if (usage.isEmpty && reasoning == 0) return null;
-    return MessageUsage(
-      inputTokens: usage.inputTokens ?? 0,
-      outputTokens: usage.outputTokens ?? 0,
-      cacheReadTokens: usage.cacheReadTokens ?? 0,
-      cacheWriteTokens: usage.cacheWriteTokens ?? 0,
-      reasoningTokens: reasoning,
-    );
-  }
-
-  /// 助手消息的块结构。流式和落库后走同一个函数，两边长得一样。
-  static List<ContentBlock> _blocksOf({
-    required String text,
-    required String thinking,
-    required String? error,
-  }) {
-    return <ContentBlock>[
-      if (thinking.isNotEmpty) QuoteBlock('💭 $thinking'),
-      ...parseMarkdownBlocks(text),
-      if (error != null && error.isNotEmpty) QuoteBlock('⚠️ $error'),
-    ];
-  }
-
-  /// 模型键 → provider id。
-  ///
-  /// 键的形式是 `providerId/modelId`（见 `ModelSpec.key`）。模型 id 自己可能
-  /// 带斜杠（`meta/llama-3.1-70b` 这类），所以按**第一个**斜杠切。
-  static String _providerFor(String modelKey) {
-    final int slash = modelKey.indexOf('/');
-    return slash <= 0 ? '' : modelKey.substring(0, slash);
-  }
-
-  /// 会话标题取用户第一句话的前几个字（功能协议 §2.1）。
-  static String _titleFrom(String text) {
-    final String flat = text.replaceAll(RegExp(r'\s+'), ' ').trim();
-    return flat.length <= 16 ? flat : '${flat.substring(0, 16)}…';
-  }
-
-  /// 侧栏分组标签。
-  static String _groupLabel(DateTime updatedAt) {
-    final DateTime now = DateTime.now();
-    final int days = DateTime(now.year, now.month, now.day)
-        .difference(DateTime(updatedAt.year, updatedAt.month, updatedAt.day))
-        .inDays;
-    if (days <= 0) return '今天';
-    if (days == 1) return '昨天';
-    if (days < 7) return '过去 7 天';
-    if (days < 30) return '过去 30 天';
-    return '更早';
-  }
-
-  static String _timeLabel(DateTime dt) {
-    final String hh = dt.hour.toString().padLeft(2, '0');
-    final String mm = dt.minute.toString().padLeft(2, '0');
-    return '$hh:$mm';
-  }
 }
 
 /// 进行中的一次生成。

@@ -23,14 +23,6 @@ Future<void> showModelMetaDialog(BuildContext context, ModelSpec model) {
   );
 }
 
-String _thinkingLabel(ThinkingFormat f) => switch (f) {
-  ThinkingFormat.none => '不支持',
-  ThinkingFormat.openaiReasoningEffort => 'OpenAI reasoning_effort',
-  ThinkingFormat.anthropicThinking => 'Anthropic thinking',
-  ThinkingFormat.deepseekReasoningContent => 'DeepSeek reasoning_content',
-  ThinkingFormat.qwenEnableThinking => 'Qwen enable_thinking',
-};
-
 String _cacheLabel(CacheControlFormat f) => switch (f) {
   CacheControlFormat.none => '不需要（或服务端自动）',
   CacheControlFormat.anthropic => 'Anthropic cache_control',
@@ -128,19 +120,25 @@ class _ModelMetaDialogState extends State<_ModelMetaDialog> {
                   () => _compat = _compat.copyWith(supportsTemperature: v),
                 ),
               ),
-              _pickerRow(
-                palette,
-                '思考方式',
-                MenuPicker<ThinkingFormat>(
-                  tooltip: '选择思考方式',
-                  value: _compat.thinking,
-                  options: <SegOption<ThinkingFormat>>[
-                    for (final ThinkingFormat f in ThinkingFormat.values)
-                      SegOption<ThinkingFormat>(f, _thinkingLabel(f)),
-                  ],
-                  onChanged: (ThinkingFormat f) =>
-                      setState(() => _compat = _compat.copyWith(thinking: f)),
-                ),
+              SwitchRow(
+                label: '支持思考',
+                desc: '在输入框用统一的 low → max 等级调节。',
+                value: _compat.thinking != ThinkingFormat.none,
+                onChanged: (bool enabled) => setState(() {
+                  if (!enabled) {
+                    _compat = _compat.copyWith(thinking: ThinkingFormat.none);
+                    return;
+                  }
+                  final ThinkingFormat format =
+                      _compat.thinking != ThinkingFormat.none
+                          ? _compat.thinking
+                          : (widget.model.providerId.toLowerCase().contains(
+                                  'anthropic',
+                                )
+                                ? ThinkingFormat.anthropicThinking
+                                : ThinkingFormat.openaiReasoningEffort);
+                  _compat = _compat.copyWith(thinking: format);
+                }),
               ),
               _pickerRow(
                 palette,

@@ -3,10 +3,11 @@ import 'package:flutter/material.dart';
 import '../../../state/app_scope.dart';
 import '../../../state/app_settings.dart';
 import '../../../theme/palette.dart';
+import '../../../theme/fonts.dart';
 import '../../widgets/segmented_control.dart';
 import '../settings_card.dart';
 
-/// 外观：主题与强调色。
+/// 外观：主题、配色与字体大小。
 class AppearanceSection extends StatelessWidget {
   const AppearanceSection({super.key});
 
@@ -36,7 +37,7 @@ class AppearanceSection extends StatelessWidget {
               ),
             ),
             SettingsRow(
-              title: '强调色',
+              title: '配色',
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: AppAccent.values.map((AppAccent accent) {
@@ -49,6 +50,19 @@ class AppearanceSection extends StatelessWidget {
                     ),
                   );
                 }).toList(),
+              ),
+            ),
+            SettingsRow(
+              title: '字体大小',
+              desc: '调整整个界面的文字显示大小。',
+              trailing: SegmentedControl<AppFontSize>(
+                small: true,
+                value: settings.fontSize,
+                options: <SegOption<AppFontSize>>[
+                  for (final AppFontSize size in AppFontSize.values)
+                    SegOption<AppFontSize>(size, size.label),
+                ],
+                onChanged: settings.setFontSize,
               ),
             ),
           ],
@@ -84,27 +98,13 @@ class _AccentSwatch extends StatelessWidget {
             border: Border.all(color: selected ? accent.color : palette.border),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Container(
-                width: 12,
-                height: 12,
-                decoration: BoxDecoration(
-                  color: accent.color,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                accent.label,
-                style: TextStyle(
-                  fontSize: 11.5,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                  color: palette.text1,
-                ),
-              ),
-            ],
+          child: Container(
+            width: 14,
+            height: 14,
+            decoration: BoxDecoration(
+              color: accent.color,
+              shape: BoxShape.circle,
+            ),
           ),
         ),
       ),

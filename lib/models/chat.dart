@@ -2,6 +2,7 @@ import 'content.dart';
 import 'dart:typed_data';
 import 'tool_call.dart';
 import 'workspace.dart';
+import '../storage/models.dart';
 
 /// 用户上传的附件。
 class Attachment {
@@ -181,6 +182,7 @@ class ChatSession {
     required this.time,
     required this.preview,
     required this.model,
+    this.thinking = ThinkingLevel.low,
     required this.files,
     required this.messages,
   });
@@ -197,6 +199,7 @@ class ChatSession {
   final String time;
   final String preview;
   final String model;
+  final ThinkingLevel thinking;
   final List<WorkspaceFile> files;
   final List<ChatMessage> messages;
 
@@ -205,6 +208,7 @@ class ChatSession {
     String? preview,
     String? time,
     String? model,
+    ThinkingLevel? thinking,
     List<WorkspaceFile>? files,
     List<ChatMessage>? messages,
   }) {
@@ -215,6 +219,7 @@ class ChatSession {
       time: time ?? this.time,
       preview: preview ?? this.preview,
       model: model ?? this.model,
+      thinking: thinking ?? this.thinking,
       files: files ?? this.files,
       messages: messages ?? this.messages,
     );

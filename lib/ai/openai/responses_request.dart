@@ -46,12 +46,14 @@ Map<String, Object?> buildResponsesRequest(ProviderRequest req) {
     body['temperature'] = req.temperature;
   }
 
-  // 6. reasoning。responses 端点上思考是个对象，不是 completions 的
-  //    单字段 reasoning_effort。
+  // 6. reasoning。Responses 端点上思考是个对象，不是 completions 的
+  //    单字段 reasoning_effort。summary 必须显式打开，否则模型会消耗
+  //    reasoning token，但流里不会出现可展示的 reasoning_summary_text.delta。
   if (req.thinkingBudget != null &&
       compat.thinking == ThinkingFormat.openaiReasoningEffort) {
     body['reasoning'] = <String, Object?>{
       'effort': _effortFor(req.thinkingBudget!),
+      'summary': 'auto',
     };
   }
 
@@ -74,7 +76,9 @@ Map<String, Object?> buildResponsesRequest(ProviderRequest req) {
 String _effortFor(int budget) {
   if (budget <= 4096) return 'low';
   if (budget <= 16384) return 'medium';
-  return 'high';
+  if (budget <= 32768) return 'high';
+  if (budget <= 65536) return 'xhigh';
+  return 'max';
 }
 
 /// 工具定义是平铺的，不像 completions 那样套一层 `function`。

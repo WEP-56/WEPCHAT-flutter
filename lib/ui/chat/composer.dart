@@ -8,8 +8,11 @@ import 'package:desktop_drop/desktop_drop.dart';
 import 'package:super_clipboard/super_clipboard.dart';
 
 import '../../app/responsive.dart';
+import '../../ai/model_catalog.dart';
+import '../../ai/model_compat.dart';
 import '../../theme/palette.dart';
 import '../../models/chat.dart';
+import '../../storage/models.dart';
 import '../widgets/controls.dart';
 
 /// 输入区。桌面端 Enter 发送、Shift+Enter 换行；窄屏 Enter 始终换行，
@@ -20,11 +23,17 @@ class Composer extends StatefulWidget {
     required this.isGenerating,
     required this.onSend,
     required this.onStop,
+    this.model,
+    this.thinking = ThinkingLevel.low,
+    this.onThinkingChanged,
   });
 
   final bool isGenerating;
   final void Function(String text, List<PendingAttachment> attachments) onSend;
   final VoidCallback onStop;
+  final ModelSpec? model;
+  final ThinkingLevel thinking;
+  final ValueChanged<ThinkingLevel>? onThinkingChanged;
 
   @override
   State<Composer> createState() => _ComposerState();
@@ -154,6 +163,9 @@ class _ComposerState extends State<Composer> {
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
     final bool compact = isCompact(context);
+    final bool thinkingSupported =
+        widget.model?.compat.thinking == ThinkingFormat.openaiReasoningEffort ||
+        widget.model?.compat.thinking == ThinkingFormat.anthropicThinking;
 
     return Container(
       padding: EdgeInsets.fromLTRB(compact ? 12 : 20, 8, compact ? 12 : 20, 12),
@@ -176,6 +188,14 @@ class _ComposerState extends State<Composer> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: <Widget>[
+                      if (thinkingSupported)
+                        _ThinkingControl(
+                          level: widget.thinking,
+                          anthropic:
+                              widget.model?.compat.thinking ==
+                              ThinkingFormat.anthropicThinking,
+                          onChanged: widget.onThinkingChanged,
+                        ),
                       IconAction(
                         icon: Icons.attach_file,
                         tooltip: '添加附件',
@@ -292,6 +312,185 @@ class _ComposerState extends State<Composer> {
       ),
     );
   }
+}
+
+/// 输入框内只显示一个思考图标，点击后在图标上方展开程度滑轨。
+class _ThinkingControl extends StatefulWidget {
+  const _ThinkingControl({
+    required this.level,
+    required this.anthropic,
+    required this.onChanged,
+  });
+
+  final ThinkingLevel level;
+  final bool anthropic;
+  final ValueChanged<ThinkingLevel>? onChanged;
+
+  @override
+  State<_ThinkingControl> createState() => _ThinkingControlState();
+}
+
+class _ThinkingControlState extends State<_ThinkingControl> {
+  late ThinkingLevel _level = _effectiveThinkingLevel(widget.level);
+
+  @override
+  void didUpdateWidget(covariant _ThinkingControl oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.level != widget.level) {
+      _level = _effectiveThinkingLevel(widget.level);
+    }
+  }
+
+  void _changeLevel(ThinkingLevel level) {
+    setState(() => _level = level);
+    widget.onChanged?.call(level);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final AppPalette palette = context.palette;
+    final Color accent = _thinkingColor(_level, palette);
+    return MenuAnchor(
+      // 菜单高度固定，以图标顶部为原点向上偏移，始终向上展开。
+      alignmentOffset: const Offset(-8, -112),
+      style: MenuStyle(
+        alignment: AlignmentDirectional.topStart,
+        backgroundColor: WidgetStatePropertyAll<Color>(palette.bgRaise),
+        surfaceTintColor: const WidgetStatePropertyAll<Color>(
+          Colors.transparent,
+        ),
+        padding: const WidgetStatePropertyAll<EdgeInsetsGeometry>(
+          EdgeInsets.zero,
+        ),
+        shape: WidgetStatePropertyAll<OutlinedBorder>(
+          RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: palette.border),
+          ),
+        ),
+      ),
+      menuChildren: <Widget>[
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+          child: SizedBox(
+            width: 190,
+            height: 84,
+            child: _ThinkingSlider(
+              level: _level,
+              anthropic: widget.anthropic,
+              onChanged: _changeLevel,
+            ),
+          ),
+        ),
+      ],
+      builder:
+          (BuildContext context, MenuController controller, Widget? child) {
+            return Tooltip(
+              message: '思考程度：${_level.name}',
+              child: IconButton(
+                visualDensity: VisualDensity.compact,
+                iconSize: 19,
+                color: accent,
+                onPressed: () => controller.isOpen
+                    ? controller.close()
+                    : controller.open(),
+                icon: const Icon(Icons.psychology_outlined),
+              ),
+            );
+          },
+    );
+  }
+}
+
+class _ThinkingSlider extends StatelessWidget {
+  const _ThinkingSlider({
+    required this.level,
+    required this.anthropic,
+    required this.onChanged,
+  });
+
+  static const List<ThinkingLevel> _levels = <ThinkingLevel>[
+    ThinkingLevel.low,
+    ThinkingLevel.medium,
+    ThinkingLevel.high,
+    ThinkingLevel.xhigh,
+    ThinkingLevel.max,
+  ];
+
+  final ThinkingLevel level;
+  final bool anthropic;
+  final ValueChanged<ThinkingLevel>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppPalette palette = context.palette;
+    final int index = _levels.indexOf(_effectiveThinkingLevel(level));
+    final ThinkingLevel effective = _levels[index];
+    final Color color = _thinkingColor(effective, palette);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: Text(
+                '${anthropic ? 'Anthropic' : 'OpenAI'} 思考',
+                style: Theme.of(context).textTheme.labelMedium,
+              ),
+            ),
+            Text(
+              effective.name,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: color,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            trackHeight: 8,
+            activeTrackColor: color,
+            inactiveTrackColor: palette.bgRaise2,
+            thumbColor: color,
+            overlayColor: color.withValues(alpha: 0.18),
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+          ),
+          child: Slider(
+            value: index.toDouble(),
+            min: 0,
+            max: (_levels.length - 1).toDouble(),
+            divisions: _levels.length - 1,
+            onChanged: onChanged == null
+                ? null
+                : (double value) => onChanged!(_levels[value.round()]),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+ThinkingLevel _effectiveThinkingLevel(ThinkingLevel level) {
+  return level == ThinkingLevel.off ? ThinkingLevel.low : level;
+}
+
+Color _thinkingColor(ThinkingLevel level, AppPalette palette) {
+  final double hue = switch (level) {
+    ThinkingLevel.low => 210,
+    ThinkingLevel.medium => 265,
+    ThinkingLevel.high => 32,
+    ThinkingLevel.xhigh => 332,
+    ThinkingLevel.max => 8,
+    ThinkingLevel.off => 210,
+  };
+  final HSLColor base = HSLColor.fromColor(palette.accent);
+  return HSLColor.fromAHSL(
+    1,
+    hue,
+    (base.saturation + 0.25).clamp(0.55, 1.0).toDouble(),
+    (base.lightness + 0.05).clamp(0.42, 0.68).toDouble(),
+  ).toColor();
 }
 
 String _mime(String name) {
