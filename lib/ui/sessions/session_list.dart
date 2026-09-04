@@ -91,7 +91,9 @@ class _SessionListPanelState extends State<SessionListPanel> {
             icon: Icons.add,
             tooltip: '新建会话',
             onTap: () {
-              store.createSession(model: context.settings.defaultModelKey);
+              store.createSession(
+                model: context.settings.resolvedDefaultModelKey,
+              );
               widget.onNavigate?.call();
             },
           ),
@@ -266,7 +268,7 @@ class _SessionListPanelState extends State<SessionListPanel> {
     if (confirmed != true || !mounted) return;
     await store.deleteSession(
       session.id,
-      fallbackModel: this.context.settings.defaultModelKey,
+      fallbackModel: this.context.settings.resolvedDefaultModelKey,
     );
   }
 

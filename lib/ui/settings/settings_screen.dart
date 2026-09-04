@@ -78,10 +78,10 @@ class _SettingsScaffoldState extends State<_SettingsScaffold> {
         : _kSections.firstWhere((_SectionSpec spec) => spec.id == _selectedId);
 
     return Scaffold(
-      backgroundColor: palette.bgSide,
+      backgroundColor: palette.bgSettings,
       appBar: AppBar(
         toolbarHeight: 50,
-        backgroundColor: palette.bgSide,
+        backgroundColor: palette.bgSettings,
         surfaceTintColor: Colors.transparent,
         scrolledUnderElevation: 0,
         leading: compact && selected != null
@@ -126,7 +126,7 @@ class _SettingsScaffoldState extends State<_SettingsScaffold> {
                           topRight: Radius.circular(16),
                         ),
                         child: ColoredBox(
-                          color: palette.bg,
+                          color: palette.bgSettings,
                           child: _DetailContent(
                             sectionId: selected?.id ?? _kSections.first.id,
                           ),

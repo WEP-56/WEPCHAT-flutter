@@ -237,6 +237,10 @@ class AppSettings extends ChangeNotifier {
     return _models.isEmpty ? null : _models.first;
   }
 
+  /// 新建会话和图片工具实际使用的默认模型。设置值失效或尚未写入时，
+  /// 与设置页展示保持一致，回退到模型列表第一项。
+  String get resolvedDefaultModelKey => defaultModel?.key ?? '';
+
   List<MemoryEntry> get memories => List<MemoryEntry>.unmodifiable(_memories);
 
   /// 相同 `category + key` 视为更新，不重复制造条目（功能协议 §7.2）。
@@ -506,13 +510,20 @@ class AppSettings extends ChangeNotifier {
   ///
   /// 连带删除是必须的：留下的模型指向一个不存在的 provider，
   /// 在选择器里看着能选，点了必然失败。
-  /// 内置 provider 不能删（[ProviderConfig.builtin] 的说明）。
+  /// 内置 provider 也可以删；删除后会随设置文件保持删除状态。
   void removeProvider(String id) {
     final ProviderConfig? target = providerOf(id);
-    if (target == null || target.builtin) return;
+    if (target == null) return;
 
+    final Set<String> removedKeys = _models
+        .where((ModelSpec m) => m.providerId == id)
+        .map((ModelSpec m) => m.key)
+        .toSet();
     _providers = _providers.where((ProviderConfig p) => p.id != id).toList();
     _models = _models.where((ModelSpec m) => m.providerId != id).toList();
+    if (removedKeys.contains(_defaultModelKey)) _defaultModelKey = '';
+    if (removedKeys.contains(_imageGenModelKey)) _imageGenModelKey = null;
+    if (removedKeys.contains(_imageEditModelKey)) _imageEditModelKey = null;
     _changed();
   }
 

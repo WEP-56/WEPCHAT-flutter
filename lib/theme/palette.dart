@@ -25,6 +25,7 @@ class AppPalette extends ThemeExtension<AppPalette> {
     required this.accentKind,
     required this.bg,
     required this.bgSide,
+    required this.bgSettings,
     required this.bgPanel,
     required this.bgRaise,
     required this.bgRaise2,
@@ -51,8 +52,8 @@ class AppPalette extends ThemeExtension<AppPalette> {
   final Brightness brightness;
   final AppAccent accentKind;
 
-  /// 背景层：窗口 / 侧栏 / 面板 / 抬升块 / 输入区。
-  final Color bg, bgSide, bgPanel, bgRaise, bgRaise2, bgComposer;
+  /// 背景层：聊天窗口 / 侧栏 / 设置页 / 面板 / 抬升块 / 输入区。
+  final Color bg, bgSide, bgSettings, bgPanel, bgRaise, bgRaise2, bgComposer;
 
   /// 描边。
   final Color border, borderStrong;
@@ -72,14 +73,16 @@ class AppPalette extends ThemeExtension<AppPalette> {
   factory AppPalette.light(AppAccent accent) => AppPalette(
     brightness: Brightness.light,
     accentKind: accent,
-    bg: const Color(0xFFFFFFFF),
-    bgSide: const Color(0xFFF7F7F8),
-    bgPanel: const Color(0xFFF7F7F8),
-    bgRaise: const Color(0xFFEFEFEF),
-    bgRaise2: const Color(0xFFE5E5E5),
-    bgComposer: const Color(0xFFF4F4F4),
-    border: const Color(0xFFE5E5E5),
-    borderStrong: const Color(0xFFD4D4D4),
+    // 冷灰纸质感：降低大面积纯白带来的刺眼感，同时保留足够层次。
+    bg: const Color(0xFFF7F8FA),
+    bgSide: const Color(0xFFF1F2F4),
+    bgSettings: const Color(0xFFF4F5F7),
+    bgPanel: const Color(0xFFFAFAFB),
+    bgRaise: const Color(0xFFECEFF2),
+    bgRaise2: const Color(0xFFE3E7EB),
+    bgComposer: const Color(0xFFF1F3F5),
+    border: const Color(0xFFE1E4E8),
+    borderStrong: const Color(0xFFD2D7DD),
     text1: const Color(0xFF0D0D0D),
     text2: const Color(0xFF666666),
     text3: const Color(0xFF8E8E8E),
@@ -90,7 +93,7 @@ class AppPalette extends ThemeExtension<AppPalette> {
     warn: const Color(0xFFD97706),
     warnSoft: const Color(0xFFD97706).withValues(alpha: 0.12),
     danger: const Color(0xFFEF4444),
-    codeBg: const Color(0xFFF6F6F6),
+    codeBg: const Color(0xFFF1F3F5),
     codeKeyword: const Color(0xFF8250DF),
     codeString: const Color(0xFF0A7B4B),
     hover: const Color(0x0D000000),
@@ -102,6 +105,7 @@ class AppPalette extends ThemeExtension<AppPalette> {
     accentKind: accent,
     bg: const Color(0xFF212121),
     bgSide: const Color(0xFF171717),
+    bgSettings: const Color(0xFF212121),
     bgPanel: const Color(0xFF171717),
     bgRaise: const Color(0xFF2F2F2F),
     bgRaise2: const Color(0xFF3A3A3A),

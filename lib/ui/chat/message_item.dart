@@ -184,7 +184,9 @@ class _MessageItemViewState extends State<MessageItemView> {
     }
     // 只有工具卡片的那条不带操作栏：它不是模型说的话，没有可复制的正文，
     // 也没有自己的 `seq` 可撤回（见 `SessionStore._toolOnlyMessage`）。
-    if (message.role == ChatRole.assistant && !message.isStreaming) {
+    if (message.role == ChatRole.assistant &&
+        !message.isStreaming &&
+        message.rawText.trim().isNotEmpty) {
       children.add(_actionBar(alignEnd: false));
     }
 

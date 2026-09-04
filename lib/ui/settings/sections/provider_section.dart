@@ -102,16 +102,14 @@ class _ProviderRow extends StatelessWidget {
                 onTap: () =>
                     unawaited(showProviderDialog(context, existing: config)),
               ),
-              // 内置 provider 不给删（删了下次启动还会回来）。
-              if (!config.builtin)
-                IconAction(
-                  icon: Icons.delete_outline,
-                  tooltip: '删除',
-                  size: 15,
-                  box: 28,
-                  tone: IconActionTone.danger,
-                  onTap: () => unawaited(_confirmRemove(context)),
-                ),
+              IconAction(
+                icon: Icons.delete_outline,
+                tooltip: '删除',
+                size: 15,
+                box: 28,
+                tone: IconActionTone.danger,
+                onTap: () => unawaited(_confirmRemove(context)),
+              ),
             ],
           ),
           const SizedBox(height: 4),

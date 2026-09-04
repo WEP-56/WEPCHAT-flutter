@@ -38,13 +38,45 @@ class ChatView extends StatefulWidget {
 class _ChatViewState extends State<ChatView> {
   final ScrollController _scroll = ScrollController();
 
+  /// 只有用户明显离开底部时才显示，避免遮住正在阅读的消息。
+  bool _showScrollToBottom = false;
+
   /// 上一次渲染的「会话 + 消息数 + 是否生成中」，用于判断要不要滚到底部。
   String _signature = '';
 
   @override
   void dispose() {
+    _scroll.removeListener(_onScroll);
     _scroll.dispose();
     super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _scroll.addListener(_onScroll);
+  }
+
+  static const double _kScrollButtonThreshold = 240;
+
+  void _onScroll() {
+    if (!_scroll.hasClients) return;
+    final bool show =
+        _scroll.position.maxScrollExtent - _scroll.position.pixels >
+        _kScrollButtonThreshold;
+    if (show == _showScrollToBottom || !mounted) return;
+    setState(() => _showScrollToBottom = show);
+  }
+
+  void _scrollToBottom() {
+    if (!_scroll.hasClients) return;
+    unawaited(
+      _scroll.animateTo(
+        _scroll.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOut,
+      ),
+    );
   }
 
   /// 生成中「算作还在跟读」的距底距离。
@@ -139,9 +171,21 @@ class _ChatViewState extends State<ChatView> {
                 workspaceOpen: widget.workspaceOpen,
               ),
               Expanded(
-                child: session.messages.isEmpty
-                    ? const _EmptyState()
-                    : _buildList(context, store, session),
+                child: Stack(
+                  children: <Widget>[
+                    Positioned.fill(
+                      child: session.messages.isEmpty
+                          ? const _EmptyState()
+                          : _buildList(context, store, session),
+                    ),
+                    if (_showScrollToBottom && session.messages.isNotEmpty)
+                      Positioned(
+                        right: isCompact(context) ? 16 : 28,
+                        bottom: 16,
+                        child: _ScrollToBottomButton(onTap: _scrollToBottom),
+                      ),
+                  ],
+                ),
               ),
               if (store.activeWasInterrupted)
                 _InterruptedBanner(
@@ -331,6 +375,32 @@ class _ChatViewState extends State<ChatView> {
       ),
     );
     return ok == true;
+  }
+}
+
+class _ScrollToBottomButton extends StatelessWidget {
+  const _ScrollToBottomButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppPalette palette = context.palette;
+    return Material(
+      color: palette.bgRaise,
+      elevation: 4,
+      shadowColor: palette.borderStrong.withValues(alpha: 0.45),
+      shape: const CircleBorder(),
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: SizedBox(
+          width: 38,
+          height: 38,
+          child: Icon(Icons.arrow_downward, size: 18, color: palette.text1),
+        ),
+      ),
+    );
   }
 }
 

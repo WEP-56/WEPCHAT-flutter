@@ -112,7 +112,9 @@ class _WepChatAppState extends State<WepChatApp> {
               palette: resolved.extension<AppPalette>()!,
               shellController: _desktopShell,
               onNewSession: () =>
-                  _sessions.createSession(model: _settings.defaultModelKey),
+                  _sessions.createSession(
+                    model: _settings.resolvedDefaultModelKey,
+                  ),
               onOpenSettings: _openSettings,
               child: child,
             ),

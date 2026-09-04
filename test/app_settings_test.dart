@@ -74,4 +74,21 @@ void main() {
     settings.setCustomSystemPrompt('   ');
     expect(settings.customSystemPrompt, isEmpty);
   });
+
+  test('内置 provider 可以删除，并清理关联模型与默认引用', () {
+    final AppSettings settings = AppSettings.memory();
+    addTearDown(settings.dispose);
+
+    final model = settings.addModel(providerId: 'openai', modelId: 'gpt-test');
+    expect(model, isNotNull);
+    settings.setDefaultModelKey(model!.key);
+    settings.setImageGenModel(model.key);
+
+    settings.removeProvider('openai');
+
+    expect(settings.providerOf('openai'), isNull);
+    expect(settings.modelByKey(model.key), isNull);
+    expect(settings.defaultModelKey, isEmpty);
+    expect(settings.imageGenModelKey, isNull);
+  });
 }

@@ -17,6 +17,7 @@ import '../stream_event.dart';
 /// response.output_item.added        ← 新的输出项（消息 / function_call / reasoning）
 /// response.output_text.delta        ← 正文增量
 /// response.reasoning_summary_text.delta  ← 思考摘要增量
+/// response.reasoning_text.delta          ← 部分兼容端点的思考增量
 /// response.function_call_arguments.delta ← 工具参数字符串增量
 /// response.output_item.done
 /// response.completed | response.incomplete | response.failed
@@ -47,11 +48,11 @@ class ResponsesAccumulator {
         _text.write(chunk);
         yield StreamTextDelta(message: snapshot(), delta: chunk);
 
-      // 思考摘要有两个事件名：新版是 reasoning_summary_text，旧版是
-      // reasoning_summary。两个都接，因为端点版本由用户的 base url 决定，
-      // 我们控制不了。
+      // 思考摘要/正文在不同 Responses 兼容端点上可能使用不同事件名；
+      // 三种都接，因为端点版本由用户的 base url 决定，我们控制不了。
       case 'response.reasoning_summary_text.delta':
       case 'response.reasoning_summary.delta':
+      case 'response.reasoning_text.delta':
         final String chunk = event['delta'] as String? ?? '';
         if (chunk.isEmpty) return;
         _thinking.write(chunk);

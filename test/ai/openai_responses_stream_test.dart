@@ -175,6 +175,20 @@ data: [DONE]
       );
     });
 
+    test('reasoning_text.delta 也进入思考内容', () async {
+      const String sse = '''
+data: {"type":"response.reasoning_text.delta","delta":"思考正文"}
+
+data: [DONE]
+
+''';
+      final List<StreamEvent> events = await collect(apiWith(sse));
+      expect(
+        (events.last as StreamDone).message.thinkingText,
+        equals('思考正文'),
+      );
+    });
+
     test('模型不支持思考时不累积，但 responses API 无条件解析', () async {
       // responses API 的累积器不看模型标记——因为 o1 的 reasoning 不在流里，
       // 只有 summary 会出现。completions API 才需要按 compat.thinking 过滤。

@@ -81,10 +81,9 @@ class ProviderConfig {
   /// **界面永不显示明文**，只显示 [maskedKey]；日志走 `redact()`。
   final String apiKey;
 
-  /// 内置 provider（首启种子）。
+  /// 首次启动时由种子列表提供的 provider。
   ///
-  /// 只影响一件事：不允许删除，删了下次启动还会回来，不如不让删。
-  /// 名称、地址、Key、API 类别都可以改。
+  /// 仅用于标记来源；用户仍可以像删除其它 provider 一样删除它。
   final bool builtin;
 
   bool get isConfigured => apiKey.isNotEmpty;

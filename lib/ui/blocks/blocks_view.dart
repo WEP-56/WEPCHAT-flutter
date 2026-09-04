@@ -137,8 +137,29 @@ class _ThinkingBlockViewState extends State<_ThinkingBlockView> {
           ),
           if (_expanded)
             Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
               child: InlineText(widget.text, size: 13, color: palette.text2),
+            ),
+          if (_expanded)
+            Align(
+              alignment: Alignment.centerRight,
+              child: InkWell(
+                onTap: () => setState(() => _expanded = false),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 0, 10, 6),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text(
+                        '收起',
+                        style: TextStyle(fontSize: 11, color: palette.text3),
+                      ),
+                      const SizedBox(width: 3),
+                      Icon(Icons.expand_less, size: 16, color: palette.text3),
+                    ],
+                  ),
+                ),
+              ),
             ),
         ],
       ),

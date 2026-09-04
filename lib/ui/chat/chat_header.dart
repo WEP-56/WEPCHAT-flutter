@@ -305,7 +305,7 @@ class _SessionMenu extends StatelessWidget {
     if (confirmed != true || !context.mounted) return;
     await context.sessions.deleteSession(
       session.id,
-      fallbackModel: context.settings.defaultModelKey,
+      fallbackModel: context.settings.resolvedDefaultModelKey,
     );
   }
 }

@@ -97,7 +97,7 @@ class GenImageTool extends _ImageToolBase {
   String modelKey(ToolContext context) =>
       context.settings?.imageGenModelKey ??
       _firstImageModel(context.settings) ??
-      context.settings?.defaultModelKey ??
+      context.settings?.resolvedDefaultModelKey ??
       '';
   @override
   Future<OpenAiImageResult> call(
@@ -145,7 +145,7 @@ class EditImageTool extends _ImageToolBase {
   String modelKey(ToolContext context) =>
       context.settings?.imageEditModelKey ??
       _firstImageModel(context.settings) ??
-      context.settings?.defaultModelKey ??
+      context.settings?.resolvedDefaultModelKey ??
       '';
   @override
   Future<OpenAiImageResult> call(
