@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'browser_page.dart';
@@ -22,4 +23,20 @@ Future<void> openWebUrl(BuildContext context, String value) async {
     return;
   }
   await launchUrl(uri, mode: LaunchMode.externalApplication);
+}
+
+Future<bool> openExternalScheme(String value) async {
+  if (!Platform.isAndroid) {
+    final Uri? uri = Uri.tryParse(value);
+    return uri != null && await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+  try {
+    return await const MethodChannel('com.wep.wepchat/platform').invokeMethod<bool>(
+          'openExternalUrl',
+          <String, Object?>{'url': value},
+        ) ??
+        false;
+  } on Object {
+    return false;
+  }
 }

@@ -3,6 +3,7 @@ library;
 
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// 打开一个已经完成路径校验的本地文件。
@@ -14,6 +15,13 @@ Future<bool> openFileInDefaultApp(String path) async {
   if (!await file.exists()) return false;
 
   try {
+    if (Platform.isAndroid) {
+      return await const MethodChannel('com.wep.wepchat/platform').invokeMethod<bool>(
+            'openFile',
+            <String, Object?>{'path': path, 'mimeType': _mimeType(path)},
+          ) ??
+          false;
+    }
     return await launchUrl(
       Uri.file(path),
       mode: LaunchMode.externalApplication,
@@ -21,4 +29,18 @@ Future<bool> openFileInDefaultApp(String path) async {
   } on Object {
     return false;
   }
+}
+
+String _mimeType(String path) {
+  final String ext = path.toLowerCase().split('.').last;
+  return <String, String>{
+    'apk': 'application/vnd.android.package-archive',
+    'pdf': 'application/pdf',
+    'png': 'image/png',
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+    'zip': 'application/zip',
+    'txt': 'text/plain',
+    'html': 'text/html',
+  }[ext] ?? 'application/octet-stream';
 }

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -12,16 +13,19 @@ class BrowserDownloadItem {
     required this.url,
     required this.filename,
     required this.status,
+    this.path,
   });
 
   final String url;
   final String filename;
   final String status;
+  final String? path;
 
   Map<String, Object?> toJson() => <String, Object?>{
     'url': url,
     'filename': filename,
     'status': status,
+    'path': path,
   };
 
   static BrowserDownloadItem? fromJson(Object? value) {
@@ -33,6 +37,7 @@ class BrowserDownloadItem {
       url: url,
       filename: filename,
       status: value['status'] as String? ?? 'done',
+      path: value['path'] as String?,
     );
   }
 }
@@ -69,6 +74,7 @@ class BrowserDownloadStore extends ChangeNotifier {
     String? suggestedFilename,
     String? contentDisposition,
     String? mimeType,
+    void Function(BrowserDownloadItem item)? onUpdate,
   }) async {
     await ensureLoaded();
     final String filename = _safeFilename(
@@ -79,11 +85,22 @@ class BrowserDownloadStore extends ChangeNotifier {
       BrowserDownloadItem(url: url, filename: filename, status: 'downloading'),
       ..._items,
     ];
+    await _save();
     notifyListeners();
+    onUpdate?.call(_items.first);
+    await _notifyAndroid(
+      filename,
+      done: false,
+    );
     final http.Client client = http.Client();
     try {
+      // Android 的公共 Downloads 目录不是所有版本都可直接写入；
+      // 应用支持目录位于 FileProvider 的 files-path 下，可安全交给系统打开。
       final Directory dir = Directory(
-        p.join((await getApplicationDocumentsDirectory()).path, 'downloads'),
+        p.join(
+          (await getApplicationSupportDirectory()).path,
+          'downloads',
+        ),
       );
       await dir.create(recursive: true);
       final http.StreamedResponse response = await client.send(
@@ -96,7 +113,12 @@ class BrowserDownloadStore extends ChangeNotifier {
       await response.stream.pipe(target.openWrite());
       _replace(
         url,
-        BrowserDownloadItem(url: url, filename: filename, status: 'done'),
+        BrowserDownloadItem(
+          url: url,
+          filename: filename,
+          status: 'done',
+          path: target.path,
+        ),
       );
     } on Object {
       _replace(
@@ -108,6 +130,39 @@ class BrowserDownloadStore extends ChangeNotifier {
     }
     await _save();
     notifyListeners();
+    for (final BrowserDownloadItem item in _items) {
+      if (item.url == url) {
+        onUpdate?.call(item);
+        await _notifyAndroid(item.filename, done: item.status == 'done');
+        break;
+      }
+    }
+  }
+
+  Future<void> _notifyAndroid(String filename, {required bool done}) async {
+    if (!Platform.isAndroid) return;
+    try {
+      const MethodChannel channel = MethodChannel('com.wep.wepchat/downloads');
+      if (!done) {
+        final bool allowed =
+            await channel.invokeMethod<bool>('requestPermission', <String, Object?>{
+              'id': filename.hashCode & 0x7fffffff,
+              'title': '正在下载',
+              'body': filename,
+              'done': false,
+            }) ??
+            true;
+        if (!allowed) return;
+      }
+      await channel.invokeMethod<void>('notify', <String, Object?>{
+        'id': filename.hashCode & 0x7fffffff,
+        'title': done ? '下载完成' : '正在下载',
+        'body': filename,
+        'done': done,
+      });
+    } on Object {
+      // 系统通知是附加能力，不能阻断实际下载。
+    }
   }
 
   void _replace(String url, BrowserDownloadItem replacement) {

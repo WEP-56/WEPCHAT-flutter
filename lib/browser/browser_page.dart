@@ -6,6 +6,8 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 import 'browser_downloads.dart';
 import 'browser_history.dart';
+import '../ui/widgets/toast.dart';
+import 'browser_launcher.dart';
 
 /// InAppWebView 的 `initialFile` 只接受 Flutter asset 路径。工作区文件必须
 /// 转成 file URI 后作为普通导航请求加载，否则 Android 会把绝对路径拼到
@@ -124,14 +126,26 @@ class _BrowserPageState extends State<BrowserPage> {
               unawaited(BrowserHistoryStore.instance.record(current, _title));
             }
           },
-          onDownloadStartRequest: (controller, request) => unawaited(
-            BrowserDownloadStore.instance.start(
-              request.url.toString(),
-              suggestedFilename: request.suggestedFilename,
-              contentDisposition: request.contentDisposition,
-              mimeType: request.mimeType,
-            ),
-          ),
+          onDownloadStartRequest: (controller, request) {
+            showAppToast(context, '已开始下载：${request.suggestedFilename ?? '文件'}');
+            return unawaited(
+              BrowserDownloadStore.instance.start(
+                request.url.toString(),
+                suggestedFilename: request.suggestedFilename,
+                contentDisposition: request.contentDisposition,
+                mimeType: request.mimeType,
+                onUpdate: (item) {
+                  if (!mounted || item.status == 'downloading') return;
+                  showAppToast(
+                    context,
+                    item.status == 'done'
+                        ? '下载完成：${item.filename}'
+                        : '下载失败：${item.filename}',
+                  );
+                },
+              ),
+            );
+          },
           shouldOverrideUrlLoading: (controller, action) async {
             final WebUri? target = action.request.url;
             if (target == null) return NavigationActionPolicy.CANCEL;
@@ -143,9 +157,14 @@ class _BrowserPageState extends State<BrowserPage> {
               'data',
               'blob',
             };
-            return allowed.contains(target.scheme.toLowerCase())
-                ? NavigationActionPolicy.ALLOW
-                : NavigationActionPolicy.CANCEL;
+            if (allowed.contains(target.scheme.toLowerCase())) {
+              return NavigationActionPolicy.ALLOW;
+            }
+            final bool opened = await openExternalScheme(target.toString());
+            if (!opened && mounted) {
+              showAppToast(context, '未找到可打开此链接的应用');
+            }
+            return NavigationActionPolicy.CANCEL;
           },
         ),
         if (_loadError != null)

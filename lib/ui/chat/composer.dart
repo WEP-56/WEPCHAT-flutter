@@ -186,7 +186,7 @@ class _ComposerState extends State<Composer> {
                 child: Container(
                   padding: const EdgeInsets.fromLTRB(6, 4, 6, 4),
                   child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: <Widget>[
                       if (thinkingSupported)
                         _ThinkingControl(
@@ -237,9 +237,7 @@ class _ComposerState extends State<Composer> {
                         ),
                       ),
                       const SizedBox(width: 4),
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 2),
-                        child: widget.isGenerating
+                      widget.isGenerating
                             ? _RoundButton(
                                 icon: Icons.stop,
                                 tooltip: '停止生成',
@@ -266,7 +264,6 @@ class _ComposerState extends State<Composer> {
                                   );
                                 },
                               ),
-                      ),
                     ],
                   ),
                   decoration: BoxDecoration(
@@ -387,14 +384,19 @@ class _ThinkingControlState extends State<_ThinkingControl> {
           (BuildContext context, MenuController controller, Widget? child) {
             return Tooltip(
               message: '思考程度：${_level.name}',
-              child: IconButton(
-                visualDensity: VisualDensity.compact,
-                iconSize: 19,
-                color: accent,
-                onPressed: () => controller.isOpen
-                    ? controller.close()
-                    : controller.open(),
-                icon: const Icon(Icons.psychology_outlined),
+              child: SizedBox(
+                width: 32,
+                height: 32,
+                child: IconButton(
+                  padding: EdgeInsets.zero,
+                  visualDensity: VisualDensity.compact,
+                  iconSize: 19,
+                  color: accent,
+                  onPressed: () => controller.isOpen
+                      ? controller.close()
+                      : controller.open(),
+                  icon: const Icon(Icons.psychology_outlined),
+                ),
               ),
             );
           },

@@ -6,7 +6,13 @@ enum AppAccent {
   telegram(Color(0xFF2AABEE), 'Telegram 蓝'),
   violet(Color(0xFF8B5CF6), '紫罗兰'),
   green(Color(0xFF10A37F), '薄荷绿'),
-  orange(Color(0xFFF97316), '活力橙');
+  orange(Color(0xFFF97316), '活力橙'),
+  cyan(Color(0xFF06B6D4), '青柠蓝'),
+  indigo(Color(0xFF6366F1), '靛青'),
+  pink(Color(0xFFEC4899), '玫红'),
+  red(Color(0xFFEF4444), '珊瑚红'),
+  amber(Color(0xFFF59E0B), '琥珀黄'),
+  slate(Color(0xFF64748B), '石板灰');
 
   const AppAccent(this.color, this.label);
 

@@ -11,6 +11,7 @@ import 'sections/provider_section.dart';
 import 'sections/search_section.dart';
 import 'sections/tools_section.dart';
 import 'sections/workspace_section.dart';
+import 'sections/storage_backup_section.dart';
 
 class _SectionSpec {
   const _SectionSpec(this.id, this.label, this.description, this.icon);
@@ -27,7 +28,7 @@ const List<_SectionSpec> _kSections = <_SectionSpec>[
   _SectionSpec('tools', '工具权限', '文件、脚本和网络工具的授权', Icons.security_outlined),
   _SectionSpec('memory', '记忆配置', '管理可跨会话使用的记忆', Icons.psychology_alt_outlined),
   _SectionSpec('appearance', '外观', '主题、强调色与显示偏好', Icons.palette_outlined),
-  _SectionSpec('storage', '存储', '工作区和本地数据位置', Icons.folder_outlined),
+  _SectionSpec('storage', '存储与备份', '工作区、本地数据与 WebDAV', Icons.folder_outlined),
   _SectionSpec('browser', '浏览器', '内置浏览器与历史记录', Icons.language_outlined),
   _SectionSpec('about', '关于', '版本、开源仓库与更新', Icons.info_outline),
 ];
@@ -285,7 +286,14 @@ Widget _sectionFor(String id) {
     'tools' => const ToolsSection(),
     'memory' => const MemorySection(),
     'appearance' => const AppearanceSection(),
-    'storage' => const WorkspaceSection(),
+    'storage' => const Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        WorkspaceSection(),
+        SizedBox(height: 14),
+        StorageBackupSection(),
+      ],
+    ),
     'browser' => const BrowserSection(),
     'about' => const AboutSection(),
     _ => throw ArgumentError.value(id, 'id', '未知设置分区'),

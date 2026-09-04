@@ -38,18 +38,20 @@ class AppearanceSection extends StatelessWidget {
             ),
             SettingsRow(
               title: '配色',
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: AppAccent.values.map((AppAccent accent) {
-                  return Padding(
-                    padding: const EdgeInsets.only(left: 6),
-                    child: _AccentSwatch(
+              trailing: SizedBox(
+                width: 330,
+                child: Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: AppAccent.values.map((AppAccent accent) {
+                    return _AccentSwatch(
                       accent: accent,
                       selected: settings.accent == accent,
                       onTap: () => settings.setAccent(accent),
-                    ),
-                  );
-                }).toList(),
+                    );
+                  }).toList(),
+                ),
               ),
             ),
             SettingsRow(

@@ -708,10 +708,33 @@ class AppSettings extends ChangeNotifier {
     'fontSize': _fontSize.name,
   };
 
+  /// 从 WebDAV 备份恢复非偏好设置。偏好（主题、字体、权限等）刻意保留。
+  Future<void> importPortableConfig(Map<String, Object?> json) async {
+    final List<ProviderConfig> providers = _readProviders(json['providers']);
+    final List<ModelSpec> models = _readModels(json['models']);
+    final List<SearchProviderConfig> searchProviders = _readSearchProviders(
+      json['searchProviders'],
+    );
+    if (models.any(
+          (ModelSpec m) =>
+              providers.every((ProviderConfig p) => p.id != m.providerId),
+        )) {
+      throw const FormatException('备份中的提供商或模型配置无效');
+    }
+    _providers = providers;
+    _models = models;
+    if (searchProviders.isNotEmpty) _searchProviders = searchProviders;
+    _defaultModelKey = json['defaultModelKey'] as String? ?? '';
+    _imageGenModelKey = json['imageGenModelKey'] as String?;
+    _imageEditModelKey = json['imageEditModelKey'] as String?;
+    _searchBackendId = json['searchBackendId'] as String? ?? '';
+    _changed();
+    await flush();
+  }
+
   @override
   void dispose() {
     _writeTimer?.cancel();
     super.dispose();
   }
-
 }
