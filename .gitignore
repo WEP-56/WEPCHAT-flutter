@@ -54,7 +54,7 @@ app.*.map.json
 # Example and temporary files
 example/
 image.png
-image*.png
+
 
 # Android release signing material (never commit private keys or passwords)
 /android/key.properties
