@@ -19,6 +19,15 @@ class AgentTurnStart extends AgentEvent {
   final int iteration;
 }
 
+class AgentStarted extends AgentEvent {
+  const AgentStarted();
+}
+
+class AgentEnded extends AgentEvent {
+  const AgentEnded({required this.stopReason});
+  final StopReason stopReason;
+}
+
 /// assistant 消息有更新（正文或思考的增量）。
 ///
 /// [message] 是当前完整的 partial 消息，界面整条重绘即可。

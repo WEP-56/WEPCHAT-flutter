@@ -12,6 +12,7 @@ import '../storage/storage.dart' hide StopReason, TokenUsage;
 import '../tools/tool.dart';
 import '../tools/tool_registry.dart';
 import 'agent_event.dart';
+import 'agent_context.dart';
 
 /// 一轮对话的配置。
 class AgentConfig {
@@ -26,6 +27,12 @@ class AgentConfig {
     this.maxOutputTokens,
     this.temperature,
     this.thinkingBudget,
+    this.maxTurns,
+    this.maxToolCalls,
+    this.maxWallTime,
+    this.maxOutputTokensTotal,
+    this.parallelToolCalls = true,
+    this.retryPolicy = const ProviderRetryPolicy(),
   });
 
   final ModelSpec model;
@@ -49,6 +56,12 @@ class AgentConfig {
   final int? maxOutputTokens;
   final double? temperature;
   final int? thinkingBudget;
+  final int? maxTurns;
+  final int? maxToolCalls;
+  final Duration? maxWallTime;
+  final int? maxOutputTokensTotal;
+  final bool parallelToolCalls;
+  final ProviderRetryPolicy retryPolicy;
 }
 
 /// 把「一次用户输入」跑成「若干次 API 调用 + 工具执行」。
@@ -84,8 +97,20 @@ class AgentLoop {
   ) async* {
     final List<ChatMessageModel> messages = List<ChatMessageModel>.of(history);
     TokenUsage total = const TokenUsage();
+    int toolCallCount = 0;
+    final Stopwatch clock = Stopwatch()..start();
 
-    for (int iteration = 1; iteration <= _config.maxIterations; iteration++) {
+    final int turnLimit = _config.maxTurns ?? _config.maxIterations;
+    for (int iteration = 1; iteration <= turnLimit; iteration++) {
+      if (_config.maxWallTime != null &&
+          clock.elapsed >= _config.maxWallTime!) {
+        yield AgentDone(
+          stopReason: StopReason.error,
+          usage: total,
+          errorMessage: '达到时间预算',
+        );
+        return;
+      }
       if (token.isCancelled) {
         yield AgentDone(stopReason: StopReason.aborted, usage: total);
         return;
@@ -93,23 +118,42 @@ class AgentLoop {
 
       yield AgentTurnStart(iteration: iteration);
 
+      final AgentContext context = AgentContext(
+        systemPromptStable: _config.systemPrompt ?? '',
+        tools: _tools.declarations,
+        messages: messages
+            .where((m) => m.isUsableInHistory)
+            .toList(growable: false),
+        budget: ContextBudget(
+          maxOutputTokensTotal: _config.maxOutputTokensTotal,
+        ),
+      );
+      final CanonicalContext canonical = canonicalizeContext(context);
+      final List<ChatMessageModel> transformed = await _api
+          .convertToProviderMessages(
+            await _api.transformContext(context.messages),
+          );
       final ProviderRequest request = ProviderRequest(
         model: _config.model,
         // 丢掉 error / aborted 的轮次（§6-14）：内容不完整，
         // 留着会让模型看到半句话或没有结果的 tool_use。
-        messages: messages
-            .where((ChatMessageModel m) => m.isUsableInHistory)
-            .toList(growable: false),
+        messages: transformed,
         systemPrompt: _config.systemPrompt,
         tools: _tools.declarations,
         maxOutputTokens: _config.maxOutputTokens,
         temperature: _config.temperature,
         thinkingBudget: _config.thinkingBudget,
         sessionId: _config.sessionId,
+        parallelToolCalls: _config.parallelToolCalls,
+        prefixHash: canonical.prefixHash,
       );
 
       ChatMessageModel? assistant;
-      await for (final StreamEvent event in _api.stream(request, token)) {
+      await for (final StreamEvent event in _api.streamWithRetry(
+        request,
+        token,
+        policy: _config.retryPolicy,
+      )) {
         switch (event) {
           case StreamStart():
             break;
@@ -138,12 +182,34 @@ class AgentLoop {
       total = total + assistant.usage;
       messages.add(assistant);
       yield AgentMessageEnd(message: assistant);
+      if (_config.maxOutputTokensTotal != null &&
+          total.outputTokens > _config.maxOutputTokensTotal!) {
+        yield AgentDone(
+          stopReason: StopReason.length,
+          usage: total,
+          errorMessage: '达到总输出 token 预算',
+        );
+        return;
+      }
 
       final StopReason reason = assistant.stopReason ?? StopReason.stop;
 
       // arguments 被截断时整批工具都不能执行（§5-9）：参数不完整，
       // 执行等于拿错参数干活。
       if (reason == StopReason.length && assistant.hasToolCalls) {
+        final List<ContentPart> truncatedResults = assistant.toolCalls
+            .map(
+              (ToolCallPart call) => ToolResultPart(
+                callId: call.id,
+                name: call.name,
+                content: '工具调用参数被截断，未执行',
+                isError: true,
+              ),
+            )
+            .toList();
+        messages.add(
+          ChatMessageModel(role: MessageRole.tool, parts: truncatedResults),
+        );
         yield AgentDone(
           stopReason: StopReason.length,
           usage: total,
@@ -161,31 +227,51 @@ class AgentLoop {
         return;
       }
 
-      final List<ContentPart> results = <ContentPart>[];
+      if (_config.maxToolCalls != null &&
+          toolCallCount + assistant.toolCalls.length > _config.maxToolCalls!) {
+        yield AgentDone(
+          stopReason: StopReason.error,
+          usage: total,
+          errorMessage: '达到工具调用预算',
+        );
+        return;
+      }
+      toolCallCount += assistant.toolCalls.length;
       for (final ToolCallPart call in assistant.toolCalls) {
         yield AgentToolStart(call: call);
+      }
+      final List<ToolResult> toolResults = await Future.wait(
+        assistant.toolCalls.map((call) async {
+          final ToolResult result = await _tools.dispatch(
+            call.name,
+            call.arguments,
+            ToolContext(
+              sessionId: _config.sessionId,
+              workspace: _config.workspace,
+              token: token,
+              settings: _config.settings,
+              storage: _config.storage,
+            ),
+          );
 
-        final ToolResult result = await _tools.dispatch(
-          call.name,
-          call.arguments,
-          ToolContext(
-            sessionId: _config.sessionId,
-            workspace: _config.workspace,
-            token: token,
-            settings: _config.settings,
-            storage: _config.storage,
-          ),
+          // 落盘时机：**工具结果每个执行完立刻落盘**（存储设计 §6.1、§9-8）。
+          // 不等整轮结束，因为副作用已经发生了——文件真的被写了。中途崩溃
+          // 重启后如果磁盘变了而上下文里没有对应的结果，模型会基于错误前提
+          // 继续决策。这个事件就是给上层的落盘信号，所以它必须在 `results`
+          // 添加之前 yield：上层落完盘，这一条才算数。
+          return result;
+        }),
+      );
+      for (int i = 0; i < assistant.toolCalls.length; i++) {
+        yield AgentToolEnd(
+          call: assistant.toolCalls[i],
+          result: toolResults[i],
         );
-
-        // 落盘时机：**工具结果每个执行完立刻落盘**（存储设计 §6.1、§9-8）。
-        // 不等整轮结束，因为副作用已经发生了——文件真的被写了。中途崩溃
-        // 重启后如果磁盘变了而上下文里没有对应的结果，模型会基于错误前提
-        // 继续决策。这个事件就是给上层的落盘信号，所以它必须在 `results`
-        // 添加之前 yield：上层落完盘，这一条才算数。
-        yield AgentToolEnd(call: call, result: result);
-
-        // 每个 tool_use 都必须配一个 tool_result，中断也不例外——
-        // 缺一个下次请求就会被 API 拒（§5-6）。所以这里不 break。
+      }
+      final List<ContentPart> results = <ContentPart>[];
+      for (int i = 0; i < assistant.toolCalls.length; i++) {
+        final ToolCallPart call = assistant.toolCalls[i];
+        final ToolResult result = toolResults[i];
         results.add(
           ToolResultPart(
             callId: call.id,

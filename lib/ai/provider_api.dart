@@ -16,6 +16,7 @@ class ToolDefinition {
     required this.name,
     required this.description,
     required this.schema,
+    this.version = '1',
   });
 
   final String name;
@@ -24,6 +25,20 @@ class ToolDefinition {
   final String description;
 
   final Map<String, Object?> schema;
+
+  /// Stable schema version used when restoring tool calls and cache metadata.
+  final String version;
+}
+
+class ProviderRetryPolicy {
+  const ProviderRetryPolicy({
+    this.maxAttempts = 1,
+    this.initialBackoff = const Duration(milliseconds: 300),
+    this.maxBackoff = const Duration(seconds: 4),
+  });
+  final int maxAttempts;
+  final Duration initialBackoff;
+  final Duration maxBackoff;
 }
 
 /// 一次请求。
@@ -38,6 +53,7 @@ class ProviderRequest {
     this.thinkingBudget,
     this.sessionId,
     this.parallelToolCalls = true,
+    this.prefixHash,
   });
 
   final ModelSpec model;
@@ -65,10 +81,21 @@ class ProviderRequest {
   final String? sessionId;
 
   final bool parallelToolCalls;
+  final String? prefixHash;
 }
 
 /// API 适配器。
 abstract class ProviderApi {
+  /// Hook for pruning or enriching context before provider conversion.
+  Future<List<ChatMessageModel>> transformContext(
+    List<ChatMessageModel> messages,
+  ) async => messages;
+
+  /// Hook for provider-specific message conversion.
+  Future<List<ChatMessageModel>> convertToProviderMessages(
+    List<ChatMessageModel> messages,
+  ) async => messages;
+
   /// 流式请求。
   ///
   /// **永不抛异常、永不 addError**（§4-2）。失败编码进最终的 [StreamDone]：
@@ -77,6 +104,58 @@ abstract class ProviderApi {
   /// 这条契约是从 pi 抄的，理由是上层 loop 只需处理一种失败路径，
   /// 不必同时接 try/catch 和事件——两条路径必然有一条会被漏掉。
   Stream<StreamEvent> stream(ProviderRequest request, CancellationToken token);
+
+  /// Retries only whole failed attempts, so partial assistant output is never duplicated.
+  Stream<StreamEvent> streamWithRetry(
+    ProviderRequest request,
+    CancellationToken token, {
+    ProviderRetryPolicy policy = const ProviderRetryPolicy(),
+  }) async* {
+    final int attempts = policy.maxAttempts < 1 ? 1 : policy.maxAttempts;
+    for (int attempt = 1; attempt <= attempts; attempt++) {
+      if (token.isCancelled) return;
+      final List<StreamEvent> events = <StreamEvent>[];
+      ChatMessageModel? done;
+      Object? thrown;
+      try {
+        await for (final StreamEvent event in stream(request, token)) {
+          events.add(event);
+          if (event is StreamDone) done = event.message;
+        }
+      } on Object catch (error) {
+        thrown = error;
+      }
+      final bool failed =
+          thrown != null || done?.stopReason == StopReason.error;
+      if (!failed || attempt == attempts || token.isCancelled) {
+        for (final StreamEvent event in events) {
+          yield event;
+        }
+        if (thrown != null && events.isEmpty) {
+          yield StreamDone(
+            message: ChatMessageModel(
+              role: MessageRole.assistant,
+              parts: const <ContentPart>[],
+              stopReason: StopReason.error,
+              errorMessage: 'Provider 请求失败',
+            ),
+          );
+        }
+        return;
+      }
+      final int multiplier = 1 << (attempt - 1);
+      final Duration delay = Duration(
+        milliseconds: (policy.initialBackoff.inMilliseconds * multiplier).clamp(
+          0,
+          policy.maxBackoff.inMilliseconds,
+        ),
+      );
+      await Future.any<void>(<Future<void>>[
+        Future<void>.delayed(delay),
+        token.whenCancelled,
+      ]);
+    }
+  }
 
   /// 无工具的一次性调用，给标题生成和压缩摘要用（§4-1）。
   ///
@@ -87,7 +166,7 @@ abstract class ProviderApi {
     CancellationToken token,
   ) async {
     ChatMessageModel? last;
-    await for (final StreamEvent event in stream(request, token)) {
+    await for (final StreamEvent event in streamWithRetry(request, token)) {
       last = event.message;
     }
     return last ??

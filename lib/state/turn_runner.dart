@@ -96,7 +96,10 @@ class TurnRunner {
 
     await for (final AgentEvent event in loop.run(history, token)) {
       switch (event) {
+        case AgentStarted():
+        case AgentEnded():
         case AgentTurnStart():
+          // 生命周期通知不单独落库；最终状态与用量统一以 AgentDone 为准。
           break;
 
         case AgentMessageUpdate(:final ai.ChatMessageModel message):
