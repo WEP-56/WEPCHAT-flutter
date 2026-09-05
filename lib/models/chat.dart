@@ -10,11 +10,15 @@ class Attachment {
     required this.name,
     required this.size,
     required this.kind,
+    this.base64Data,
+    this.mimeType,
   });
 
   final String name;
   final String size;
   final FileKind kind;
+  final String? base64Data;
+  final String? mimeType;
 }
 
 /// 尚未落库的用户附件；发送时转成请求层的 ImagePart 或文本内容。

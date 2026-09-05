@@ -1,7 +1,22 @@
 import 'content.dart';
 
 /// 工作区文件类型。名称与扩展名一致，便于从文件名解析。
-enum FileKind { md, csv, py, css, png, jpg, html, json, pdf, txt }
+enum FileKind {
+  md,
+  csv,
+  py,
+  js,
+  ts,
+  css,
+  yaml,
+  xml,
+  png,
+  jpg,
+  html,
+  json,
+  pdf,
+  txt,
+}
 
 class WorkspaceFile {
   const WorkspaceFile({

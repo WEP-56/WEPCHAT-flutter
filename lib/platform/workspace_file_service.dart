@@ -4,6 +4,8 @@ import 'package:file_selector/file_selector.dart';
 import 'package:path/path.dart' as p;
 
 import 'workspace_guard.dart';
+import 'open_file.dart';
+import 'file_save_result.dart';
 
 class WorkspaceFileService {
   const WorkspaceFileService(this.root);
@@ -57,16 +59,11 @@ class WorkspaceFileService {
     return count;
   }
 
-  Future<bool> export(String relativePath) async {
+  Future<FileSaveResult> export(String relativePath) async {
     final PathCheck checked = _guard.check(relativePath);
-    if (checked is! PathAllowed) return false;
-    final File source = File(checked.absolute);
-    if (!await source.exists()) return false;
-    final FileSaveLocation? destination = await getSaveLocation(
-      suggestedName: p.basename(checked.absolute),
-    );
-    if (destination == null) return false;
-    await source.copy(destination.path);
-    return true;
+    if (checked is! PathAllowed) {
+      return const FileSaveFailed('导出失败：文件路径不在当前工作区内');
+    }
+    return saveFileToDevice(checked.absolute);
   }
 }

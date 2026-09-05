@@ -1,5 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'dart:convert';
 
 import '../../models/chat.dart';
 import '../../models/tool_call.dart';
@@ -205,28 +206,54 @@ class _AttachmentChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      decoration: BoxDecoration(
-        color: palette.bgPanel,
-        border: Border.all(color: palette.border),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          FileIconBox(kind: attachment.kind, size: 20, radius: 5),
-          const SizedBox(width: 7),
-          Text(
-            attachment.name,
-            style: TextStyle(fontSize: 11.5, color: palette.text1),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            attachment.size,
-            style: TextStyle(fontSize: 10.5, color: palette.text3),
-          ),
-        ],
+    final bool image =
+        attachment.mimeType?.startsWith('image/') == true &&
+        attachment.base64Data != null;
+    return GestureDetector(
+      onTap: attachment.base64Data == null
+          ? null
+          : () => showDialog<void>(
+              context: context,
+              builder: (_) {
+                if (image)
+                  return Dialog(
+                    child: InteractiveViewer(
+                      child: Image.memory(base64Decode(attachment.base64Data!)),
+                    ),
+                  );
+                final String text = utf8.decode(
+                  base64Decode(attachment.base64Data!),
+                  allowMalformed: true,
+                );
+                return AlertDialog(
+                  title: Text(attachment.name),
+                  content: SingleChildScrollView(child: SelectableText(text)),
+                );
+              },
+            ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          color: palette.bgPanel,
+          border: Border.all(color: palette.border),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            FileIconBox(kind: attachment.kind, size: 20, radius: 5),
+            const SizedBox(width: 7),
+            Text(
+              attachment.name,
+              style: TextStyle(fontSize: 11.5, color: palette.text1),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              attachment.size,
+              style: TextStyle(fontSize: 10.5, color: palette.text3),
+            ),
+          ],
+        ),
       ),
     );
   }

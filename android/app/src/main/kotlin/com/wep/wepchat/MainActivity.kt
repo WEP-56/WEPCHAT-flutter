@@ -9,6 +9,8 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.FileProvider
 import java.io.File
+import android.content.ContentValues
+import android.provider.MediaStore
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.plugin.common.MethodChannel
@@ -31,6 +33,20 @@ class MainActivity : FlutterActivity() {
                     }
                     result.success(openFile(path, call.argument<String>("mimeType")))
                     return@setMethodCallHandler
+                }
+                if (call.method == "shareFile") {
+                    val path = call.argument<String>("path")
+                    if (path.isNullOrBlank()) {
+                        result.error("INVALID_PATH", "文件路径为空", null)
+                        return@setMethodCallHandler
+                    }
+                    result.success(shareFile(path, call.argument<String>("mimeType")))
+                    return@setMethodCallHandler
+                }
+                if (call.method == "saveFile") {
+                    val path = call.argument<String>("path")
+                    if (path.isNullOrBlank()) { result.error("INVALID_PATH", "文件路径为空", null); return@setMethodCallHandler }
+                    result.success(saveFile(path, call.argument<String>("mimeType"))); return@setMethodCallHandler
                 }
                 if (call.method == "openExternalUrl") {
                     val value = call.argument<String>("url")
@@ -118,6 +134,29 @@ class MainActivity : FlutterActivity() {
         } catch (_: ActivityNotFoundException) {
             false
         }
+    }
+
+    private fun shareFile(path: String, mimeType: String?): Boolean {
+        val file = File(path)
+        if (!file.isFile) return false
+        val authority = "${applicationContext.packageName}.fileprovider"
+        val uri = try { FileProvider.getUriForFile(this, authority, file) } catch (_: IllegalArgumentException) { return false }
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = mimeType ?: contentResolver.getType(uri) ?: "application/octet-stream"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        return try { startActivity(Intent.createChooser(intent, "分享文件")); true } catch (_: ActivityNotFoundException) { false }
+    }
+
+    private fun saveFile(path: String, mimeType: String?): Boolean {
+        val source = File(path); if (!source.isFile || Build.VERSION.SDK_INT < 29) return false
+        val image = mimeType?.startsWith("image/") == true
+        val values = ContentValues().apply { put(MediaStore.MediaColumns.DISPLAY_NAME, source.name); put(MediaStore.MediaColumns.MIME_TYPE, mimeType ?: "application/octet-stream"); put(MediaStore.MediaColumns.RELATIVE_PATH, if (image) "Pictures/WePChat" else "Download/WePChat"); put(MediaStore.MediaColumns.IS_PENDING, 1) }
+        val collection = if (image) MediaStore.Images.Media.EXTERNAL_CONTENT_URI else MediaStore.Downloads.EXTERNAL_CONTENT_URI
+        val uri = contentResolver.insert(collection, values) ?: return false
+        return try { source.inputStream().use { input -> contentResolver.openOutputStream(uri)!!.use { output -> input.copyTo(output) } }; values.clear(); values.put(MediaStore.MediaColumns.IS_PENDING, 0); contentResolver.update(uri, values, null, null); true } catch (_: Exception) { contentResolver.delete(uri, null, null); false }
     }
 
     private fun openExternalUrl(rawUrl: String): Boolean {

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -5,6 +7,7 @@ import '../../app/app_nav.dart';
 import '../../models/chat.dart';
 import '../../models/workspace.dart';
 import '../../platform/open_directory.dart';
+import '../../platform/open_file.dart';
 import '../../platform/workspace_file_service.dart';
 import '../../state/app_scope.dart';
 import '../../state/session_store.dart';
@@ -360,6 +363,11 @@ class _FileRow extends StatelessWidget {
           onSelected: () => _exportWorkspaceFile(context, file),
         ),
         context_menu.ContextAction(
+          label: '分享',
+          icon: Icons.share_outlined,
+          onSelected: () => _shareWorkspaceFile(context, file),
+        ),
+        context_menu.ContextAction(
           label: '删除',
           icon: Icons.delete_outline,
           destructive: true,
@@ -395,6 +403,11 @@ class _FileRow extends StatelessWidget {
                 ),
               ),
               IconButton(
+                tooltip: '分享',
+                icon: const Icon(Icons.share_outlined, size: 17),
+                onPressed: () => _shareWorkspaceFile(context, file),
+              ),
+              IconButton(
                 tooltip: '导出',
                 icon: const Icon(Icons.download_outlined, size: 17),
                 onPressed: () => _exportWorkspaceFile(context, file),
@@ -412,6 +425,19 @@ class _FileRow extends StatelessWidget {
   }
 }
 
+Future<void> _shareWorkspaceFile(
+  BuildContext context,
+  WorkspaceFile file,
+) async {
+  final String root = context.sessions.workspacePathFor(
+    context.sessions.active.id,
+  );
+  final bool ok = await shareFile(
+    '$root${Platform.pathSeparator}${file.name.replaceAll('/', Platform.pathSeparator)}',
+  );
+  if (context.mounted) showAppToast(context, ok ? '已打开分享面板' : '分享失败');
+}
+
 void _openWorkspaceFile(BuildContext context, WorkspaceFile file) {
   if (file.kind == FileKind.html) {
     AppNav.openHtml(context, file: file.name);
@@ -426,9 +452,9 @@ Future<void> _exportWorkspaceFile(
 ) async {
   final SessionStore store = context.sessions;
   final String root = store.workspacePathFor(store.active.id);
-  final bool ok = await WorkspaceFileService(root).export(file.name);
+  final saved = await WorkspaceFileService(root).export(file.name);
   if (context.mounted) {
-    showAppToast(context, ok ? '已导出 ${file.name}' : '导出已取消或失败');
+    showAppToast(context, saved.message);
   }
 }
 

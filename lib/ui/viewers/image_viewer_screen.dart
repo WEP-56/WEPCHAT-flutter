@@ -5,6 +5,9 @@ import '../../theme/palette.dart';
 import '../widgets/controls.dart';
 import '../widgets/file_visuals.dart';
 import '../widgets/toast.dart';
+import '../../platform/open_file.dart';
+import '../../platform/workspace_file_service.dart';
+import '../../state/app_scope.dart';
 
 /// 图片查看器。[gallery] 为同一会话的图片列表，可左右切换。
 class ImageViewerScreen extends StatefulWidget {
@@ -48,11 +51,19 @@ class _ImageViewerScreenState extends State<ImageViewerScreen> {
         backgroundColor: palette.bgSide,
         surfaceTintColor: Colors.transparent,
         scrolledUnderElevation: 0,
-        title: Text(
-          current,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: AppFonts.mono(size: 12.5, color: palette.text1),
+        title: Row(
+          children: <Widget>[
+            FileIconBox(kind: fileKindFromName(current), size: 24, radius: 6),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                current,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppFonts.mono(size: 12.5, color: palette.text1),
+              ),
+            ),
+          ],
         ),
         actions: <Widget>[
           if (multiple)
@@ -68,7 +79,42 @@ class _ImageViewerScreenState extends State<ImageViewerScreen> {
           IconAction(
             icon: Icons.download_outlined,
             tooltip: '导出',
-            onTap: () => showAppToast(context, '导出图片（预览版未接入文件系统）'),
+            onTap: () async {
+              final root = context.sessions.workspacePathFor(
+                context.sessions.active.id,
+              );
+              final saved = await WorkspaceFileService(root).export(current);
+              if (context.mounted) {
+                showAppToast(context, saved.message);
+              }
+            },
+          ),
+          IconAction(
+            icon: Icons.share_outlined,
+            tooltip: '分享',
+            onTap: () async {
+              final root = context.sessions.workspacePathFor(
+                context.sessions.active.id,
+              );
+              final ok = await shareFile(
+                '$root/${current.replaceAll('/', '/')}',
+              );
+              if (context.mounted)
+                showAppToast(context, ok ? '已打开分享面板' : '分享失败');
+            },
+          ),
+          IconAction(
+            icon: Icons.save_alt_outlined,
+            tooltip: '保存到设备',
+            onTap: () async {
+              final root = context.sessions.workspacePathFor(
+                context.sessions.active.id,
+              );
+              final saved = await WorkspaceFileService(root).export(current);
+              if (context.mounted) {
+                showAppToast(context, saved.message);
+              }
+            },
           ),
           const SizedBox(width: 6),
         ],

@@ -1,10 +1,7 @@
 part of 'session_store.dart';
 
 /// 把存储记录投影成聊天界面使用的只读模型。
-ChatSession _toChatSession(
-  SessionRecord record,
-  List<EntryRecord> entries,
-) {
+ChatSession _toChatSession(SessionRecord record, List<EntryRecord> entries) {
   return ChatSession(
     id: record.id,
     title: record.title,
@@ -102,10 +99,19 @@ ChatMessage _toChatMessage(EntryRecord entry) {
       if (raw is! Map<String, Object?> || raw['name'] is! String) continue;
       final String name = raw['name'] as String;
       final String mime = raw['mimeType'] as String? ?? '';
+      final String? base64 = raw['base64'] as String?;
       final FileKind kind = mime.startsWith('image/')
           ? FileKind.png
           : FileKind.txt;
-      attachments.add(Attachment(name: name, size: '附件', kind: kind));
+      attachments.add(
+        Attachment(
+          name: name,
+          size: '附件',
+          kind: kind,
+          base64Data: base64,
+          mimeType: mime,
+        ),
+      );
     }
   }
 
@@ -192,9 +198,11 @@ String _titleFrom(String text) {
 
 String _groupLabel(DateTime updatedAt) {
   final DateTime now = DateTime.now();
-  final int days = DateTime(now.year, now.month, now.day)
-      .difference(DateTime(updatedAt.year, updatedAt.month, updatedAt.day))
-      .inDays;
+  final int days = DateTime(
+    now.year,
+    now.month,
+    now.day,
+  ).difference(DateTime(updatedAt.year, updatedAt.month, updatedAt.day)).inDays;
   if (days <= 0) return '今天';
   if (days == 1) return '昨天';
   if (days < 7) return '过去 7 天';

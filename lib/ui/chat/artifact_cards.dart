@@ -7,6 +7,8 @@ import '../../theme/palette.dart';
 import '../widgets/controls.dart';
 import '../widgets/file_visuals.dart';
 import '../widgets/toast.dart';
+import '../../platform/workspace_file_service.dart';
+import '../../state/app_scope.dart';
 
 /// 工作区文件引用（消息底部的产物列表）。
 class FileChip extends StatelessWidget {
@@ -83,7 +85,17 @@ class ImageResultView extends StatelessWidget {
                 tooltip: '导出',
                 size: 14,
                 box: 26,
-                onTap: () => showAppToast(context, '导出图片（预览版未接入文件系统）'),
+                onTap: () async {
+                  final String root = context.sessions.workspacePathFor(
+                    context.sessions.active.id,
+                  );
+                  final saved = await WorkspaceFileService(
+                    root,
+                  ).export(result.file);
+                  if (context.mounted) {
+                    showAppToast(context, saved.message);
+                  }
+                },
               ),
               IconAction(
                 icon: Icons.open_in_full,

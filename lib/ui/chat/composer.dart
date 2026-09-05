@@ -76,6 +76,19 @@ class _ComposerState extends State<Composer> {
             'md',
             'csv',
             'json',
+            'py',
+            'js',
+            'ts',
+            'tsx',
+            'jsx',
+            'html',
+            'htm',
+            'css',
+            'scss',
+            'yaml',
+            'yml',
+            'xml',
+            'log',
           ],
         ),
       ],
@@ -238,32 +251,32 @@ class _ComposerState extends State<Composer> {
                       ),
                       const SizedBox(width: 4),
                       widget.isGenerating
-                            ? _RoundButton(
-                                icon: Icons.stop,
-                                tooltip: '停止生成',
-                                background: palette.bgRaise2,
-                                foreground: palette.text1,
-                                onTap: widget.onStop,
-                              )
-                            : ListenableBuilder(
-                                listenable: _controller,
-                                builder: (BuildContext context, Widget? _) {
-                                  final bool ready =
-                                      _controller.text.trim().isNotEmpty ||
-                                      _attachments.isNotEmpty;
-                                  return _RoundButton(
-                                    icon: Icons.arrow_upward,
-                                    tooltip: '发送',
-                                    background: ready
-                                        ? palette.accent
-                                        : palette.bgRaise2,
-                                    foreground: ready
-                                        ? Colors.white
-                                        : palette.text3,
-                                    onTap: ready ? _submit : null,
-                                  );
-                                },
-                              ),
+                          ? _RoundButton(
+                              icon: Icons.stop,
+                              tooltip: '停止生成',
+                              background: palette.bgRaise2,
+                              foreground: palette.text1,
+                              onTap: widget.onStop,
+                            )
+                          : ListenableBuilder(
+                              listenable: _controller,
+                              builder: (BuildContext context, Widget? _) {
+                                final bool ready =
+                                    _controller.text.trim().isNotEmpty ||
+                                    _attachments.isNotEmpty;
+                                return _RoundButton(
+                                  icon: Icons.arrow_upward,
+                                  tooltip: '发送',
+                                  background: ready
+                                      ? palette.accent
+                                      : palette.bgRaise2,
+                                  foreground: ready
+                                      ? Colors.white
+                                      : palette.text3,
+                                  onTap: ready ? _submit : null,
+                                );
+                              },
+                            ),
                     ],
                   ),
                   decoration: BoxDecoration(
@@ -508,6 +521,19 @@ String _mime(String name) {
         'csv': 'text/csv',
         'md': 'text/markdown',
         'txt': 'text/plain',
+        'py': 'text/x-python',
+        'js': 'text/javascript',
+        'ts': 'text/typescript',
+        'tsx': 'text/typescript',
+        'jsx': 'text/javascript',
+        'html': 'text/html',
+        'htm': 'text/html',
+        'css': 'text/css',
+        'scss': 'text/x-scss',
+        'yaml': 'text/yaml',
+        'yml': 'text/yaml',
+        'xml': 'application/xml',
+        'log': 'text/plain',
       }[ext] ??
       'application/octet-stream';
 }

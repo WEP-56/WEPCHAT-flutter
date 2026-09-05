@@ -553,8 +553,23 @@ class SessionStore extends ChangeNotifier {
           if (raw is! Map<String, Object?>) continue;
           final String? b64 = raw['base64'] as String?;
           final String? mime = raw['mimeType'] as String?;
+          final String name = raw['name'] as String? ?? 'attachment';
           if (b64 == null || mime == null) continue;
-          parts.add(ai.ImagePart(base64Data: b64, mimeType: mime));
+          if (mime.startsWith('image/')) {
+            parts.add(ai.ImagePart(base64Data: b64, mimeType: mime));
+          } else {
+            // 文本/代码附件必须作为文本进入模型上下文；将其伪装成
+            // ImagePart 会让 provider 请求体违反图片输入协议。
+            try {
+              final String content = utf8.decode(base64Decode(b64));
+              parts.add(
+                ai.TextPart('\n\n附件 `$name`（$mime）：\n```\n$content\n```'),
+              );
+            } on FormatException {
+              // 二进制附件暂不上传给模型，保留文件名让模型知道其存在。
+              parts.add(ai.TextPart('\n\n附件 `$name`（$mime，二进制内容未展开）。'));
+            }
+          }
         }
       }
       switch (entry.role) {
@@ -686,7 +701,6 @@ class SessionStore extends ChangeNotifier {
     }
     return result;
   }
-
 }
 
 /// 进行中的一次生成。

@@ -7,6 +7,7 @@ import '../../mock/file_bodies.dart';
 import '../../models/content.dart';
 import '../../models/workspace.dart';
 import '../../platform/workspace_file_service.dart';
+import '../../platform/open_file.dart';
 import '../../state/app_scope.dart';
 import '../../models/markdown_blocks.dart';
 import '../../theme/fonts.dart';
@@ -60,9 +61,34 @@ class FileViewerScreen extends StatelessWidget {
               final String path = context.sessions.workspacePathFor(
                 context.sessions.active.id,
               );
-              final bool ok = await WorkspaceFileService(path).export(file);
+              final saved = await WorkspaceFileService(path).export(file);
               if (context.mounted) {
-                showAppToast(context, ok ? '已导出 $file' : '导出已取消或失败');
+                showAppToast(context, saved.message);
+              }
+            },
+          ),
+          IconAction(
+            icon: Icons.share_outlined,
+            tooltip: '分享',
+            onTap: () async {
+              final String root = context.sessions.workspacePathFor(
+                context.sessions.active.id,
+              );
+              final bool ok = await shareFile(pathForRelative(root, file));
+              if (context.mounted)
+                showAppToast(context, ok ? '已打开分享面板' : '分享失败');
+            },
+          ),
+          IconAction(
+            icon: Icons.save_alt_outlined,
+            tooltip: '保存到设备',
+            onTap: () async {
+              final String root = context.sessions.workspacePathFor(
+                context.sessions.active.id,
+              );
+              final saved = await WorkspaceFileService(root).export(file);
+              if (context.mounted) {
+                showAppToast(context, saved.message);
               }
             },
           ),
@@ -109,7 +135,11 @@ class FileViewerScreen extends StatelessWidget {
           FileKind.md,
           FileKind.txt,
           FileKind.py,
+          FileKind.js,
+          FileKind.ts,
           FileKind.css,
+          FileKind.yaml,
+          FileKind.xml,
           FileKind.json,
           FileKind.csv,
         }.contains(kind)) {
