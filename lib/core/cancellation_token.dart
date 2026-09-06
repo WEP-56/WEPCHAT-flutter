@@ -19,6 +19,7 @@ class CancellationToken {
 
   /// 取消时立即完成的 Future，可用于 select 等待。
   Future<void> get whenCancelled {
+    if (_isCancelled) return Future<void>.value();
     final Completer<void>? completed = _completer;
     if (completed != null) return completed.future;
     final Completer<void> c = Completer<void>();

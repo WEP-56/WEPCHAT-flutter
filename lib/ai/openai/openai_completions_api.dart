@@ -56,6 +56,8 @@ class OpenAiCompletionsApi extends ProviderApi {
         headers: buildProviderHeaders(
           defaults: <String, String>{
             'content-type': 'application/json',
+            'accept': 'text/event-stream',
+            'cache-control': 'no-cache',
             'authorization': 'Bearer $_apiKey',
           },
           custom: _customHeaders,
@@ -63,6 +65,7 @@ class OpenAiCompletionsApi extends ProviderApi {
         body: buildCompletionsRequest(request),
         token: token,
       );
+      token.throwIfCancelled();
 
       yield StreamStart(message: acc.snapshot());
 

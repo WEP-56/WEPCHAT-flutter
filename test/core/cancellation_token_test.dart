@@ -57,6 +57,11 @@ void main() {
       expect(completed, isTrue);
     });
 
+    test('取消后才读取 whenCancelled 也立即完成', () async {
+      final source = CancellationTokenSource()..cancel();
+      await source.token.whenCancelled.timeout(const Duration(seconds: 1));
+    });
+
     test('derive() 派生子 token，父取消时子自动取消', () {
       final CancellationTokenSource parent = CancellationTokenSource();
       final CancellationToken child = parent.derive();

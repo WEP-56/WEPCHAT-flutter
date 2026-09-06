@@ -28,20 +28,36 @@ class RunJsTool extends Tool {
   ToolDefinition get definition => const ToolDefinition(
     name: 'run_js',
     description:
-        '在隔离的 JavaScript 运行时中处理文本、JSON、CSV 和工作区文件。'
-        '工作区 API：await wep.fs.listFiles(path?, recursive?)、readText(path)、writeText(path, content)。'
-        '可使用 fetch 做网络连通性/API 调试；不能访问 Shell、进程、环境变量或工作区外路径。'
-        '脚本中的密钥会随调用记录保存，不要把长期凭据写入脚本。',
+        '在受限 JavaScript 运行时中执行一段完整脚本，用于处理文本、JSON、CSV '
+        '并读写当前会话工作区。必须把代码放在 code 字段。除 JavaScript 内置语法和下列明确列出的运行时 API 外，'
+        '不要假设存在其他 Node.js 或浏览器 API。工作区 API 只有：'
+        'await wep.fs.listFiles(path = "", recursive = true)（返回最多 500 项，'
+        '每项含 path/type/size）、await wep.fs.readText(path)（相对工作区路径，'
+        '单文件最多 1 MiB）、await wep.fs.writeText(path, content)（创建或覆盖文件）。'
+        'wep.fs 仅提供 listFiles、readText、writeText，不提供 exists、delete、mkdir 等其他文件系统方法。'
+        '路径必须是相对路径，不能使用 .. 越出工作区；写入结果会作为产物显示。'
+        '此外，console.log/info/warn/error 可用于输出日志；提供 fetch 时可用于 HTTP/HTTPS 请求，不能用于读取本地文件。'
+        'console 输出和脚本最后一个表达式的值会返回。顶层不能使用 return 或 await；'
+        '异步脚本必须将 (async () => { ... })() 作为脚本最后一个表达式并实际调用，不要只定义函数。'
+        '建议用 JSON.stringify 或返回对象来输出结构化结果。运行时不是 Node.js 或浏览器，'
+        '不要使用 require、Buffer、process、fs、document、window 等 API；没有 Shell、'
+        '进程、环境变量或任意本地文件 API。timeout_ms 只能是 1000-30000。示例：'
+        '(async () => { const files = await wep.fs.listFiles("data"); '
+        'const text = await wep.fs.readText("data/input.csv"); '
+        'return { count: files.length, chars: text.length }; })()。'
+        '脚本中的密钥会随调用记录保存，不要写入长期凭据。',
     schema: <String, Object?>{
       'type': 'object',
       'properties': <String, Object?>{
         'code': <String, Object?>{
           'type': 'string',
-          'description': '要执行的 JavaScript 源码。',
+          'description':
+              '完整 JavaScript 脚本或 Promise 表达式；异步工作请使用 '
+              '(async () => { ... })() 并 await wep.fs 方法。',
         },
         'timeout_ms': <String, Object?>{
           'type': 'integer',
-          'description': '超时毫秒数，默认 12000，允许 1000-30000。',
+          'description': '脚本执行超时（毫秒），默认 12000，必须为 1000-30000 的整数。',
         },
       },
       'required': <String>['code'],

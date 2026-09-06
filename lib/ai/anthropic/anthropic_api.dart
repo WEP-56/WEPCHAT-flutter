@@ -55,6 +55,8 @@ class AnthropicApi extends ProviderApi {
         headers: buildProviderHeaders(
           defaults: <String, String>{
             'content-type': 'application/json',
+            'accept': 'text/event-stream',
+            'cache-control': 'no-cache',
             'x-api-key': _apiKey,
             'anthropic-version': _apiVersion,
           },
@@ -63,6 +65,7 @@ class AnthropicApi extends ProviderApi {
         body: buildAnthropicRequest(request),
         token: token,
       );
+      token.throwIfCancelled();
 
       yield StreamStart(message: acc.snapshot());
 

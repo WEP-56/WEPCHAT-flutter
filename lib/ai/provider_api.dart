@@ -105,42 +105,76 @@ abstract class ProviderApi {
   /// 不必同时接 try/catch 和事件——两条路径必然有一条会被漏掉。
   Stream<StreamEvent> stream(ProviderRequest request, CancellationToken token);
 
-  /// Retries only whole failed attempts, so partial assistant output is never duplicated.
+  /// 增量立即转发；只有尚未输出任何增量的失败请求才允许重试。
+  /// 已显示的正文、思考和工具参数不能撤回，不能靠缓存整轮来实现重试。
   Stream<StreamEvent> streamWithRetry(
     ProviderRequest request,
     CancellationToken token, {
     ProviderRetryPolicy policy = const ProviderRetryPolicy(),
   }) async* {
     final int attempts = policy.maxAttempts < 1 ? 1 : policy.maxAttempts;
+    ChatMessageModel latest = ChatMessageModel(
+      role: MessageRole.assistant,
+      parts: const <ContentPart>[],
+      modelId: request.model.id,
+    );
+    bool started = false;
     for (int attempt = 1; attempt <= attempts; attempt++) {
-      if (token.isCancelled) return;
-      final List<StreamEvent> events = <StreamEvent>[];
+      if (token.isCancelled) {
+        yield StreamDone(
+          message: latest.copyWith(stopReason: StopReason.aborted),
+        );
+        return;
+      }
+      bool emittedDelta = false;
       ChatMessageModel? done;
-      Object? thrown;
       try {
         await for (final StreamEvent event in stream(request, token)) {
-          events.add(event);
-          if (event is StreamDone) done = event.message;
-        }
-      } on Object catch (error) {
-        thrown = error;
-      }
-      final bool failed =
-          thrown != null || done?.stopReason == StopReason.error;
-      if (!failed || attempt == attempts || token.isCancelled) {
-        for (final StreamEvent event in events) {
+          if (token.isCancelled) break;
+          if (event is StreamDone) {
+            done = event.message;
+            break;
+          }
+          latest = event.message;
+          if (event is StreamStart) {
+            if (started) continue;
+            started = true;
+          } else {
+            emittedDelta = true;
+          }
           yield event;
         }
-        if (thrown != null && events.isEmpty) {
-          yield StreamDone(
-            message: ChatMessageModel(
-              role: MessageRole.assistant,
-              parts: const <ContentPart>[],
-              stopReason: StopReason.error,
-              errorMessage: 'Provider 请求失败',
-            ),
-          );
-        }
+      } on CancelledException {
+        yield StreamDone(
+          message: latest.copyWith(stopReason: StopReason.aborted),
+        );
+        return;
+      } on Object {
+        // 适配器违反不抛异常的契约时，保留已显示的内容并明确报错。
+        done = latest.copyWith(
+          stopReason: StopReason.error,
+          errorMessage: 'Provider 请求失败',
+        );
+      }
+      if (token.isCancelled) {
+        yield StreamDone(
+          message: latest.copyWith(stopReason: StopReason.aborted),
+        );
+        return;
+      }
+      if (done == null) {
+        yield StreamDone(
+          message: latest.copyWith(
+            stopReason: StopReason.error,
+            errorMessage: '适配器没有产生结束事件',
+          ),
+        );
+        return;
+      }
+      if (done.stopReason != StopReason.error ||
+          emittedDelta ||
+          attempt == attempts) {
+        yield StreamDone(message: done);
         return;
       }
       final int multiplier = 1 << (attempt - 1);

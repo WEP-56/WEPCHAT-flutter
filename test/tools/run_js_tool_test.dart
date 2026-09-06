@@ -25,6 +25,26 @@ void main() {
     workspace.deleteSync(recursive: true);
   });
 
+  test('工具描述明确异步写法、工作区 API 和安全边界', () {
+    const RunJsTool tool = RunJsTool(runtime: _ResultRuntime());
+    expect(tool.definition.description, contains('(async () =>'));
+    expect(tool.definition.description, contains('await wep.fs.readText'));
+    expect(tool.definition.description, contains('相对路径'));
+    expect(tool.definition.description, contains('没有 Node.js'));
+    expect(
+      tool.definition.description,
+      contains('wep.fs 仅提供 listFiles、readText、writeText'),
+    );
+    expect(tool.definition.description, contains('顶层不能使用 return 或 await'));
+    expect(tool.definition.description, contains('实际调用'));
+    final properties =
+        tool.definition.schema['properties']! as Map<String, Object?>;
+    expect(
+      (properties['code']! as Map<String, Object?>)['description'],
+      contains('await'),
+    );
+  });
+
   test('校验 code 与 timeout_ms', () async {
     const RunJsTool tool = RunJsTool(runtime: _ResultRuntime());
 

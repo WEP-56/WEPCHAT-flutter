@@ -454,6 +454,8 @@ class SessionStore extends ChangeNotifier {
             ? _settings.temperature
             : null,
         thinkingBudget: _thinkingBudget(model, session.thinking),
+        // 尚未收到增量的失败才允许重试，避免重复输出。
+        retryPolicy: const ProviderRetryPolicy(maxAttempts: 3),
       ),
     );
 

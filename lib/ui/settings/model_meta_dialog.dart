@@ -131,29 +131,14 @@ class _ModelMetaDialogState extends State<_ModelMetaDialog> {
                   }
                   final ThinkingFormat format =
                       _compat.thinking != ThinkingFormat.none
-                          ? _compat.thinking
-                          : (widget.model.providerId.toLowerCase().contains(
-                                  'anthropic',
-                                )
-                                ? ThinkingFormat.anthropicThinking
-                                : ThinkingFormat.openaiReasoningEffort);
+                      ? _compat.thinking
+                      : (widget.model.providerId.toLowerCase().contains(
+                              'anthropic',
+                            )
+                            ? ThinkingFormat.anthropicThinking
+                            : ThinkingFormat.openaiReasoningEffort);
                   _compat = _compat.copyWith(thinking: format);
                 }),
-              ),
-              _pickerRow(
-                palette,
-                'Prompt 缓存',
-                MenuPicker<CacheControlFormat>(
-                  tooltip: '选择缓存方式',
-                  value: _compat.cache,
-                  options: <SegOption<CacheControlFormat>>[
-                    for (final CacheControlFormat f
-                        in CacheControlFormat.values)
-                      SegOption<CacheControlFormat>(f, _cacheLabel(f)),
-                  ],
-                  onChanged: (CacheControlFormat f) =>
-                      setState(() => _compat = _compat.copyWith(cache: f)),
-                ),
               ),
               const SizedBox(height: 2),
               InkWell(
@@ -207,6 +192,20 @@ class _ModelMetaDialogState extends State<_ModelMetaDialog> {
 
   List<Widget> _advancedRows(AppPalette palette) {
     return <Widget>[
+      _pickerRow(
+        palette,
+        'Prompt 缓存',
+        MenuPicker<CacheControlFormat>(
+          tooltip: '选择缓存方式',
+          value: _compat.cache,
+          options: <SegOption<CacheControlFormat>>[
+            for (final CacheControlFormat f in CacheControlFormat.values)
+              SegOption<CacheControlFormat>(f, _cacheLabel(f)),
+          ],
+          onChanged: (CacheControlFormat f) =>
+              setState(() => _compat = _compat.copyWith(cache: f)),
+        ),
+      ),
       _pickerRow(
         palette,
         '输出上限字段名',
