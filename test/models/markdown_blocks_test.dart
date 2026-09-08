@@ -158,9 +158,20 @@ void main() {
       // 表格打到一半也不该炸。
       expect(parseMarkdownBlocks('| 列 |\n|'), isA<List<ContentBlock>>());
     });
+
+    test('数据行列数不齐时补齐空单元格', () {
+      final TableBlock table =
+          parseMarkdownBlocks('| 名称 | 数量 |\n| --- | --- |\n| 苹果 |').single
+              as TableBlock;
+      expect(table.rows.single.cells, equals(<String>['苹果', '']));
+    });
   });
 
   group('块级公式', () {
+    test(r'\\[ \\] 形式也解析为独立公式', () {
+      final List<ContentBlock> blocks = parseMarkdownBlocks(r'\[x^2\]');
+      expect((blocks.single as MathBlock).latex, equals('x^2'));
+    });
     test(r'$$ 独立成块，定界符不进内容', () {
       final List<ContentBlock> blocks = parseMarkdownBlocks(
         '前面\n\n\$\$\n\\sum_{i=1}^{n} i\n\$\$\n\n后面',
@@ -196,6 +207,17 @@ void main() {
       expect(blocks.length, equals(2));
       expect(blocks[0], isA<ParagraphBlock>());
       expect((blocks[1] as MathBlock).latex, equals('x^2'));
+    });
+  });
+
+  group('折叠区域', () {
+    test('HTML details 解析标题和内容', () {
+      final List<ContentBlock> blocks = parseMarkdownBlocks(
+        '<details>\n<summary>展开</summary>\n内容\n</details>',
+      );
+      final DetailsBlock details = blocks.single as DetailsBlock;
+      expect(details.summary, equals('展开'));
+      expect(details.text, equals('内容'));
     });
   });
 

@@ -34,7 +34,8 @@ class InlineText extends StatelessWidget {
     r'|`[^`]+`'
     r'|!?\[[^\]]*\]\([^)\s]+(?:[^)]*)\)'
     r'|\[(\d+)\]'
-    r'|\$[^$\s][^$]*?\$)',
+    r'|\$[^$\s][^$]*?\$'
+    r'|\\\([^\\\n]*?\\\))',
   );
 
   @override
@@ -115,18 +116,27 @@ class InlineText extends StatelessWidget {
     // 不合法的 LaTeX，那时显示 `$x^$` 也比一个红色错误框强。
     if (token.startsWith(r'$')) {
       final String latex = token.substring(1, token.length - 1);
-      return WidgetSpan(
-        alignment: PlaceholderAlignment.middle,
-        child: Math.tex(
-          latex,
-          textStyle: base,
-          onErrorFallback: (Object _) => Text(token, style: base),
-        ),
-      );
+      return _mathSpan(token, latex, base);
     }
 
-    // 兜底：原样文本。
+    // LaTeX 传统行内定界符：\(...\)。
+    if (token.startsWith(r'\(')) {
+      final String latex = token.substring(2, token.length - 2);
+      return _mathSpan(token, latex, base);
+    }
+
     return TextSpan(text: token);
+  }
+
+  InlineSpan _mathSpan(String source, String latex, TextStyle base) {
+    return WidgetSpan(
+      alignment: PlaceholderAlignment.middle,
+      child: Math.tex(
+        latex,
+        textStyle: base,
+        onErrorFallback: (Object _) => Text(source, style: base),
+      ),
+    );
   }
 
   InlineSpan _linkSpan(BuildContext context, String token, AppPalette palette) {

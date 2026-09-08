@@ -13,6 +13,12 @@ class TableBlockView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
+    final int columnCount = <int>[
+      1,
+      block.head.length,
+      ...block.rows.map((TableRowData r) => r.cells.length),
+    ].reduce((int a, int b) => a > b ? a : b);
+    final List<String> head = _fitCells(block.head, columnCount);
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(10),
@@ -34,9 +40,9 @@ class TableBlockView extends StatelessWidget {
                   color: palette.bgRaise.withValues(alpha: 0.6),
                 ),
                 children: <Widget>[
-                  for (int i = 0; i < block.head.length; i++)
+                  for (int i = 0; i < head.length; i++)
                     _Cell(
-                      text: block.head[i],
+                      text: head[i],
                       align: i == 0 ? TextAlign.left : TextAlign.right,
                       style: TextStyle(
                         fontSize: 11,
@@ -49,9 +55,9 @@ class TableBlockView extends StatelessWidget {
               for (final TableRowData row in block.rows)
                 TableRow(
                   children: <Widget>[
-                    for (int i = 0; i < row.cells.length; i++)
+                    for (int i = 0; i < columnCount; i++)
                       _Cell(
-                        text: row.cells[i],
+                        text: i < row.cells.length ? row.cells[i] : '',
                         align: i == 0 ? TextAlign.left : TextAlign.right,
                         style: i == 0
                             ? TextStyle(fontSize: 12.5, color: palette.text1)
@@ -68,6 +74,11 @@ class TableBlockView extends StatelessWidget {
       ),
     );
   }
+}
+
+List<String> _fitCells(List<String> cells, int count) {
+  if (cells.length >= count) return cells.take(count).toList();
+  return <String>[...cells, ...List<String>.filled(count - cells.length, '')];
 }
 
 class _Cell extends StatelessWidget {

@@ -8,6 +8,7 @@ import '../widgets/file_visuals.dart';
 import 'code_block_view.dart';
 import 'inline_text.dart';
 import 'table_block_view.dart';
+import '../../models/markdown_blocks.dart';
 
 /// 内容块列表渲染入口。聊天正文和文件预览共用。
 class BlocksView extends StatelessWidget {
@@ -66,8 +67,10 @@ class BlockView extends StatelessWidget {
           ),
         ),
         child: InlineText(text, size: 13, color: palette.text2),
-        ),
+      ),
       ThinkingBlock(:final String text) => _ThinkingBlockView(text: text),
+      DetailsBlock(:final String summary, :final String text) =>
+        _DetailsBlockView(summary: summary, text: text),
       final TableBlock block => TableBlockView(block: block),
       final CodeBlock block => CodeBlockView(block: block),
       MathBlock(:final String latex) => _MathBlockView(latex: latex),
@@ -76,6 +79,72 @@ class BlockView extends StatelessWidget {
         alt: alt,
       ),
     };
+  }
+}
+
+class _DetailsBlockView extends StatefulWidget {
+  const _DetailsBlockView({required this.summary, required this.text});
+
+  final String summary;
+  final String text;
+
+  @override
+  State<_DetailsBlockView> createState() => _DetailsBlockViewState();
+}
+
+class _DetailsBlockViewState extends State<_DetailsBlockView> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppPalette palette = context.palette;
+    return Container(
+      decoration: BoxDecoration(
+        color: palette.bgPanel,
+        border: Border.all(color: palette.border),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          InkWell(
+            onTap: () => setState(() => _expanded = !_expanded),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+              child: Row(
+                children: <Widget>[
+                  Icon(
+                    _expanded ? Icons.expand_less : Icons.expand_more,
+                    size: 17,
+                    color: palette.text3,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      widget.summary,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: palette.text2,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (_expanded && widget.text.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+              child: BlocksView(
+                blocks: parseMarkdownBlocks(widget.text),
+                gap: 6,
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }
 
@@ -110,7 +179,11 @@ class _ThinkingBlockViewState extends State<_ThinkingBlockView> {
               padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
               child: Row(
                 children: <Widget>[
-                  Icon(Icons.psychology_outlined, size: 16, color: palette.accent),
+                  Icon(
+                    Icons.psychology_outlined,
+                    size: 16,
+                    color: palette.accent,
+                  ),
                   const SizedBox(width: 7),
                   Text(
                     '思考过程',

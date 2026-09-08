@@ -1,13 +1,14 @@
 /// Markdown 文本 → 内容块（实施 TODO M1）。
 ///
 /// 只解析**块级**结构：标题、代码块、列表、引用、表格、段落。行内样式
-/// （`**粗体**`、`` `代码` ``）由 `inline_text.dart` 渲染时处理，这里不拆。
+/// （`**粗体**`、`` `代码` ``、`$公式$`）由 `inline_text.dart` 渲染时处理，这里不拆。
 ///
 /// 设计决策：
 /// - **未闭合的代码块当作已闭合**：流式生成时最后一块必然是未闭合的，
 ///   显示成字面 ` ```lang ` 而非代码块会让用户以为坏了。
 /// - 不支持嵌套：列表项里的子列表、引用里的代码块都当纯文本。
-/// - 表格必须有表头行；没有分隔行的当普通文本。
+/// - 表格必须有表头行；没有分隔行的当普通文本。列数不齐时补空单元格，
+///   以满足 Flutter Table 的结构约束。
 library;
 
 import 'content.dart';
@@ -39,11 +40,19 @@ List<ContentBlock> parseMarkdownBlocks(String text) {
 
     // 块级公式：$$ 开头。和代码围栏一样收集到闭合处，未闭合当已闭合
     // ——流式生成时最后一块必然未闭合。
-    if (line.trim().startsWith(r'$$')) {
+    if (_isMathBlockStart(line)) {
       final _MathFence fence = _parseMathFence(lines, i);
       // 只有 $$ 没有内容时不产生空块（流式刚吐出定界符的那一帧）。
       if (fence.latex.trim().isNotEmpty) blocks.add(MathBlock(fence.latex));
       i = fence.endIndex;
+      continue;
+    }
+
+    // HTML details 折叠区域。流式生成尚未吐出闭合标签时，也先显示已收到的内容。
+    if (line.trimLeft().toLowerCase().startsWith('<details')) {
+      final _DetailsRun details = _parseDetails(lines, i);
+      blocks.add(DetailsBlock(details.summary, details.text));
+      i = details.endIndex;
       continue;
     }
 
@@ -154,15 +163,27 @@ class _MathFence {
   final int endIndex;
 }
 
+bool _isMathBlockStart(String line) {
+  final String trimmed = line.trim();
+  return trimmed.startsWith(r'$$') || trimmed.startsWith(r'\[');
+}
+
 /// 收集 `$$` 公式块。支持两种形态：
 /// - `$$x^2$$` —— 定界符和内容在同一行；
 /// - 独立的 `$$` 行打开，后续行是内容，直到 `$$` 行或文本结束。
 _MathFence _parseMathFence(List<String> lines, int start) {
   final String first = lines[start].trim();
 
-  // 同行闭合：$$ 内容 $$。
-  if (first.length > 4 && first.endsWith(r'$$')) {
-    return _MathFence(first.substring(2, first.length - 2), start + 1);
+  final bool bracket = first.startsWith(r'\[');
+  final String open = bracket ? r'\[' : r'$$';
+  final String close = bracket ? r'\]' : r'$$';
+
+  // 同行闭合：$$ 内容 $$ 或 \\[ 内容 \\]。
+  if (first.length > open.length + close.length && first.endsWith(close)) {
+    return _MathFence(
+      first.substring(open.length, first.length - close.length),
+      start + 1,
+    );
   }
 
   // 独立的打开行。
@@ -170,7 +191,7 @@ _MathFence _parseMathFence(List<String> lines, int start) {
   int i = start + 1;
   while (i < lines.length) {
     final String line = lines[i].trim();
-    if (line.startsWith(r'$$')) {
+    if (line.startsWith(close)) {
       return _MathFence(body.join('\n'), i + 1);
     }
     body.add(lines[i]);
@@ -179,6 +200,39 @@ _MathFence _parseMathFence(List<String> lines, int start) {
 
   // 未闭合：当作已闭合（流式生成时最后一块必然未闭合）。
   return _MathFence(body.join('\n'), i);
+}
+
+class _DetailsRun {
+  const _DetailsRun(this.summary, this.text, this.endIndex);
+
+  final String summary;
+  final String text;
+  final int endIndex;
+}
+
+_DetailsRun _parseDetails(List<String> lines, int start) {
+  String summary = '折叠内容';
+  final List<String> body = <String>[];
+  int i = start + 1;
+  final RegExp summaryPattern = RegExp(
+    r'<summary>(.*?)</summary>',
+    caseSensitive: false,
+  );
+  final RegExpMatch? openingSummary = summaryPattern.firstMatch(lines[start]);
+  if (openingSummary != null) summary = openingSummary.group(1)!.trim();
+  while (i < lines.length) {
+    final String line = lines[i];
+    final RegExpMatch? summaryMatch = summaryPattern.firstMatch(line);
+    if (summaryMatch != null) {
+      summary = summaryMatch.group(1)!.trim();
+    } else if (line.trim().toLowerCase() == '</details>') {
+      return _DetailsRun(summary, body.join('\n').trim(), i + 1);
+    } else {
+      body.add(line);
+    }
+    i++;
+  }
+  return _DetailsRun(summary, body.join('\n').trim(), i);
 }
 
 // ────────────────── 标题 ──────────────────
@@ -297,7 +351,31 @@ _TableRun? _parseTable(List<String> lines, int start) {
     i++;
   }
 
-  return _TableRun(headCells, rows, i);
+  // Flutter Table 要求每一行列数完全一致。流式输出或模型偶尔漏掉末尾
+  // 单元格时，按表头列数补空值，避免构建阶段触发断言并显示灰色异常块。
+  final int columnCount = headCells.length;
+  final List<TableRowData> normalizedRows = rows
+      .map(
+        (TableRowData row) => TableRowData(
+          _normalizeTableCells(row.cells, columnCount),
+          neg: row.neg,
+        ),
+      )
+      .toList();
+  return _TableRun(
+    _normalizeTableCells(headCells, columnCount),
+    normalizedRows,
+    i,
+  );
+}
+
+List<String> _normalizeTableCells(List<String> cells, int columnCount) {
+  if (cells.length == columnCount) return cells;
+  if (cells.length > columnCount) return cells.sublist(0, columnCount);
+  return <String>[
+    ...cells,
+    ...List<String>.filled(columnCount - cells.length, ''),
+  ];
 }
 
 List<String> _parseTableRow(String line) {
@@ -352,12 +430,13 @@ bool _isImageOnlyParagraph(List<String> lines, int start) {
   final String line = lines[next];
   return line.trim().isEmpty ||
       line.trimLeft().startsWith('```') ||
-      line.trim().startsWith(r'$$') ||
+      _isMathBlockStart(line) ||
       _headingHashes(line) > 0 ||
       line.trimLeft().startsWith('>') ||
       _isUnorderedListItem(line) ||
       _isOrderedListItem(line) ||
-      _startsTable(lines, next);
+      _startsTable(lines, next) ||
+      line.trimLeft().toLowerCase().startsWith('<details');
 }
 
 _ImageRun? _parseImageLine(String line) {
@@ -392,12 +471,13 @@ _TextRun _collectParagraph(List<String> lines, int start) {
     // 公式块就永远等不到闭合了。
     if (line.trim().isEmpty ||
         line.trimLeft().startsWith('```') ||
-        line.trim().startsWith(r'$$') ||
+        _isMathBlockStart(line) ||
         _headingHashes(line) > 0 ||
         line.trimLeft().startsWith('>') ||
         _isUnorderedListItem(line) ||
         _isOrderedListItem(line) ||
-        _startsTable(lines, i)) {
+        _startsTable(lines, i) ||
+        line.trimLeft().toLowerCase().startsWith('<details')) {
       break;
     }
     texts.add(line);

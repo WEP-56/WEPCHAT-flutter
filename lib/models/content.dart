@@ -67,6 +67,14 @@ class MathBlock extends ContentBlock {
   final String latex;
 }
 
+/// HTML details 折叠块（`<details><summary>标题</summary>内容</details>`）。
+class DetailsBlock extends ContentBlock {
+  const DetailsBlock(this.summary, this.text);
+
+  final String summary;
+  final String text;
+}
+
 /// 图片（`![alt](url)` 独占一行时）。
 ///
 /// 图片本身是行内语法，但一整行只有一张图时单独成块，可以独占宽度、

@@ -50,6 +50,14 @@ class CodeBlockView extends StatelessWidget {
                   Expanded(
                     child: Row(
                       children: <Widget>[
+                        if (block.lang.toLowerCase() == 'mermaid') ...<Widget>[
+                          Icon(
+                            Icons.account_tree_outlined,
+                            size: 14,
+                            color: palette.accent,
+                          ),
+                          const SizedBox(width: 6),
+                        ],
                         Text(
                           block.lang,
                           style: TextStyle(
