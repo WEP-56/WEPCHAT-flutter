@@ -4,6 +4,7 @@ import '../../app/responsive.dart';
 import '../../theme/palette.dart';
 import 'sections/appearance_section.dart';
 import 'sections/about_section.dart';
+import 'sections/advanced_section.dart';
 import 'sections/browser_section.dart';
 import 'sections/memory_section.dart';
 import 'sections/model_section.dart';
@@ -26,6 +27,7 @@ const List<_SectionSpec> _kSections = <_SectionSpec>[
   _SectionSpec('model_service', '模型服务', '提供商、模型与生成参数', Icons.hub_outlined),
   _SectionSpec('search', '网络搜索', '网页搜索服务与联网能力', Icons.travel_explore),
   _SectionSpec('tools', '工具权限', '文件、脚本和网络工具的授权', Icons.security_outlined),
+  _SectionSpec('advanced', '高级功能', 'MCP 外部工具与服务器配置', Icons.extension_outlined),
   _SectionSpec('memory', '记忆配置', '管理可跨会话使用的记忆', Icons.psychology_alt_outlined),
   _SectionSpec('appearance', '外观', '主题、强调色与显示偏好', Icons.palette_outlined),
   _SectionSpec('storage', '存储与备份', '工作区、本地数据与 WebDAV', Icons.folder_outlined),
@@ -284,6 +286,7 @@ Widget _sectionFor(String id) {
     ),
     'search' => const SearchSection(),
     'tools' => const ToolsSection(),
+    'advanced' => const AdvancedSection(),
     'memory' => const MemorySection(),
     'appearance' => const AppearanceSection(),
     'storage' => const Column(

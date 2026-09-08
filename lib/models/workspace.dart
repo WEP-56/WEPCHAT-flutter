@@ -1,6 +1,8 @@
+import 'package:path/path.dart' as p;
+
 import 'content.dart';
 
-/// 工作区文件类型。名称与扩展名一致，便于从文件名解析。
+/// 工作区文件的展示类型，不决定文件是否在列表中可见。
 enum FileKind {
   md,
   csv,
@@ -16,6 +18,23 @@ enum FileKind {
   json,
   pdf,
   txt,
+  other,
+}
+
+/// 扫描与预览共用的类型识别。未支持的格式和无扩展名文件明确归为
+/// [FileKind.other]，不丢弃文件，也不假定其内容是纯文本。
+FileKind fileKindFromName(String name) {
+  final String extension = p.extension(name).toLowerCase();
+  final String normalized = switch (extension) {
+    '.jpeg' => '.jpg',
+    '.htm' => '.html',
+    '.yml' => '.yaml',
+    _ => extension,
+  };
+  for (final FileKind kind in FileKind.values) {
+    if (normalized == '.${kind.name}') return kind;
+  }
+  return FileKind.other;
 }
 
 class WorkspaceFile {

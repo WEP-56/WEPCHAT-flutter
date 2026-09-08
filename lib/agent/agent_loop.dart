@@ -240,38 +240,37 @@ class AgentLoop {
       for (final ToolCallPart call in assistant.toolCalls) {
         yield AgentToolStart(call: call);
       }
-      final List<ToolResult> toolResults = await Future.wait(
-        assistant.toolCalls.map((call) async {
-          final ToolResult result = await _tools.dispatch(
-            call.name,
-            call.arguments,
-            ToolContext(
-              sessionId: _config.sessionId,
-              workspace: _config.workspace,
-              token: token,
-              settings: _config.settings,
-              storage: _config.storage,
-            ),
-          );
+      final Map<int, ToolResult> toolResults = <int, ToolResult>{};
+      final Stream<(int, ToolResult)> completions =
+          Stream<(int, ToolResult)>.fromFutures(
+            assistant.toolCalls.indexed.map((indexedCall) async {
+              final (int index, ToolCallPart call) = indexedCall;
+              final ToolResult result = await _tools.dispatch(
+                call.name,
+                call.arguments,
+                ToolContext(
+                  sessionId: _config.sessionId,
+                  callId: call.id,
+                  workspace: _config.workspace,
+                  token: token,
+                  settings: _config.settings,
+                  storage: _config.storage,
+                ),
+              );
 
-          // 落盘时机：**工具结果每个执行完立刻落盘**（存储设计 §6.1、§9-8）。
-          // 不等整轮结束，因为副作用已经发生了——文件真的被写了。中途崩溃
-          // 重启后如果磁盘变了而上下文里没有对应的结果，模型会基于错误前提
-          // 继续决策。这个事件就是给上层的落盘信号，所以它必须在 `results`
-          // 添加之前 yield：上层落完盘，这一条才算数。
-          return result;
-        }),
-      );
-      for (int i = 0; i < assistant.toolCalls.length; i++) {
-        yield AgentToolEnd(
-          call: assistant.toolCalls[i],
-          result: toolResults[i],
-        );
+              return (index, result);
+            }),
+          );
+      // Emit each completion immediately; a slow MCP request must not delay
+      // persisting another tool's already-applied side effect.
+      await for (final (int index, ToolResult result) in completions) {
+        toolResults[index] = result;
+        yield AgentToolEnd(call: assistant.toolCalls[index], result: result);
       }
       final List<ContentPart> results = <ContentPart>[];
       for (int i = 0; i < assistant.toolCalls.length; i++) {
         final ToolCallPart call = assistant.toolCalls[i];
-        final ToolResult result = toolResults[i];
+        final ToolResult result = toolResults[i]!;
         results.add(
           ToolResultPart(
             callId: call.id,

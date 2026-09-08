@@ -4,6 +4,9 @@
 /// 弹窗的答案可以在本会话内记住。
 library;
 
+import 'dart:async';
+
+import '../core/cancellation_token.dart';
 import '../models/settings.dart';
 import '../state/app_settings.dart';
 import 'tool.dart';
@@ -15,12 +18,16 @@ class PermissionRequest {
     required this.toolName,
     required this.permissionId,
     required this.arguments,
+    required this.displayName,
+    required this.token,
   });
 
   final String sessionId;
 
   /// 模型调用的工具名，例如 `write_file`。
   final String toolName;
+  final String displayName;
+  final CancellationToken token;
 
   /// 对应的权限设置 id（`kToolPermissionSpecs`）。多个工具可能共用一条。
   final String permissionId;
@@ -92,6 +99,7 @@ class PermissionGate {
     required Tool tool,
     required String sessionId,
     required Map<String, Object?> arguments,
+    CancellationToken? token,
   }) async {
     final String permissionId = tool.permissionId;
 
@@ -120,14 +128,32 @@ class PermissionGate {
       );
     }
 
-    final PermissionAnswer? answer = await prompt(
-      PermissionRequest(
-        sessionId: sessionId,
-        toolName: tool.name,
-        permissionId: permissionId,
-        arguments: arguments,
-      ),
-    );
+    final CancellationToken activeToken = token ?? CancellationToken.none;
+    activeToken.throwIfCancelled();
+    final Completer<PermissionAnswer?> cancelled =
+        Completer<PermissionAnswer?>();
+    final void Function() unregister = activeToken.onCancel(() {
+      if (!cancelled.isCompleted) cancelled.complete(null);
+    });
+    final PermissionAnswer? answer;
+    try {
+      answer = await Future.any<PermissionAnswer?>(<Future<PermissionAnswer?>>[
+        prompt(
+          PermissionRequest(
+            sessionId: sessionId,
+            toolName: tool.name,
+            permissionId: permissionId,
+            arguments: arguments,
+            displayName: tool.displayName,
+            token: activeToken,
+          ),
+        ),
+        cancelled.future,
+      ]);
+    } finally {
+      unregister();
+    }
+    activeToken.throwIfCancelled();
 
     if (answer == null || !answer.allowed) {
       return PermissionVerdict.deny(

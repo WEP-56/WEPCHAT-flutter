@@ -5,6 +5,29 @@ import 'package:wepchat/core/cancellation_token.dart';
 
 void main() {
   group('CancellationToken', () {
+    test('请求结束后可以解除取消回调', () {
+      final CancellationTokenSource source = CancellationTokenSource();
+      int calls = 0;
+      final void Function() unregister = source.token.onCancel(() => calls++);
+      unregister();
+      unregister();
+      source.cancel();
+      expect(calls, 0);
+    });
+
+    test('取消回调中解除自身注册不会破坏其他回调', () {
+      final CancellationTokenSource source = CancellationTokenSource();
+      int calls = 0;
+      late final void Function() unregister;
+      unregister = source.token.onCancel(() {
+        unregister();
+        calls++;
+      });
+      source.token.onCancel(() => calls++);
+      source.cancel();
+      expect(calls, 2);
+    });
+
     test('none token 永不取消', () {
       expect(CancellationToken.none.isCancelled, isFalse);
       CancellationToken.none.throwIfCancelled(); // 不抛异常

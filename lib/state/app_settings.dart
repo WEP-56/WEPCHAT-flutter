@@ -7,12 +7,14 @@ import '../ai/model_catalog.dart';
 import '../ai/model_compat.dart';
 import '../ai/provider_config.dart';
 import '../mock/mock_settings.dart';
+import '../mcp/mcp_config.dart';
 import '../models/settings.dart';
 import '../platform/settings_store.dart';
 import '../theme/fonts.dart';
 import '../theme/palette.dart';
 
 part 'app_settings_parsing.dart';
+part 'app_settings_mcp.dart';
 
 /// 全局设置，落在 App 私有目录的 settings.json 里（实施 TODO §13.4）。
 ///
@@ -26,6 +28,7 @@ class AppSettings extends ChangeNotifier {
     required List<ProviderConfig> providers,
     required List<ModelSpec> models,
     required Map<String, ToolPermission> permissions,
+    required McpSettings mcp,
     required String defaultModelKey,
     required String? imageGenModelKey,
     required String? imageEditModelKey,
@@ -45,6 +48,7 @@ class AppSettings extends ChangeNotifier {
        _providers = providers,
        _models = models,
        _permissions = permissions,
+       _mcp = mcp,
        _defaultModelKey = defaultModelKey,
        _imageGenModelKey = imageGenModelKey,
        _imageEditModelKey = imageEditModelKey,
@@ -75,6 +79,7 @@ class AppSettings extends ChangeNotifier {
       providers: _readProviders(json['providers']),
       models: _readModels(json['models']),
       permissions: _readPermissions(json['permissions']),
+      mcp: McpSettings.fromJson(json['mcp']),
       defaultModelKey: json['defaultModelKey'] as String? ?? '',
       imageGenModelKey: json['imageGenModelKey'] as String?,
       imageEditModelKey: json['imageEditModelKey'] as String?,
@@ -131,6 +136,8 @@ class AppSettings extends ChangeNotifier {
   List<ModelSpec> _models;
 
   final Map<String, ToolPermission> _permissions;
+  McpSettings _mcp;
+  McpSettings get mcp => _mcp;
 
   String _defaultModelKey;
 
@@ -291,6 +298,14 @@ class AppSettings extends ChangeNotifier {
   /// 拼错了该立刻炸。但权限门查的是工具自报的 id，一个新工具忘了声明
   /// 不该让整轮对话崩掉；退到「询问」既不静默放行，用户也能看见。
   ToolPermission permissionOrAsk(String toolId) {
+    if (toolId.startsWith(kMcpPermissionPrefix)) {
+      final McpServerConfig? server = _mcp.server(
+        toolId.substring(kMcpPermissionPrefix.length),
+      );
+      return _mcp.enabled && server != null && server.enabled
+          ? server.permission
+          : ToolPermission.denied;
+    }
     return _permissions[toolId] ?? ToolPermission.ask;
   }
 
@@ -688,6 +703,7 @@ class AppSettings extends ChangeNotifier {
   }
 
   Map<String, Object?> toJson() => <String, Object?>{
+    'mcp': _mcp.toJson(),
     'providers': <Map<String, Object?>>[
       for (final ProviderConfig p in _providers) p.toJson(),
     ],

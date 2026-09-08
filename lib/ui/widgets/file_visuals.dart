@@ -7,6 +7,8 @@ import '../../models/workspace.dart';
 import '../../state/app_scope.dart';
 import '../../theme/palette.dart';
 
+export '../../models/workspace.dart' show fileKindFromName;
+
 IconData fileKindIcon(FileKind kind) {
   return switch (kind) {
     FileKind.md => Icons.description_outlined,
@@ -20,19 +22,8 @@ IconData fileKindIcon(FileKind kind) {
     FileKind.html => Icons.language,
     FileKind.png || FileKind.jpg => Icons.image_outlined,
     FileKind.pdf => Icons.picture_as_pdf_outlined,
+    FileKind.other => Icons.insert_drive_file_outlined,
   };
-}
-
-/// 从文件名推断类型。未知扩展名按纯文本展示（仅影响图标，不影响读取语义）。
-FileKind fileKindFromName(String name) {
-  final int dot = name.lastIndexOf('.');
-  if (dot < 0 || dot == name.length - 1) return FileKind.txt;
-  final String ext = name.substring(dot + 1).toLowerCase();
-  final String normalized = ext == 'jpeg' ? 'jpg' : ext;
-  for (final FileKind kind in FileKind.values) {
-    if (kind.name == normalized) return kind;
-  }
-  return FileKind.txt;
 }
 
 /// 文件类型图标底板。

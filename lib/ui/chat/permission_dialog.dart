@@ -4,6 +4,7 @@ library;
 import 'package:flutter/material.dart';
 
 import '../../models/settings.dart';
+import '../../mcp/mcp_config.dart';
 import '../../theme/fonts.dart';
 import '../../theme/palette.dart';
 import '../../tools/permission_gate.dart';
@@ -28,10 +29,42 @@ Future<PermissionAnswer?> showPermissionDialog(
   );
 }
 
-class _PermissionDialog extends StatelessWidget {
+class _PermissionDialog extends StatefulWidget {
   const _PermissionDialog({required this.request});
 
   final PermissionRequest request;
+
+  @override
+  State<_PermissionDialog> createState() => _PermissionDialogState();
+}
+
+class _PermissionDialogState extends State<_PermissionDialog> {
+  PermissionRequest get request => widget.request;
+  late final void Function() _unregister;
+
+  @override
+  void initState() {
+    super.initState();
+    _unregister = request.token.onCancel(() {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          final ModalRoute<PermissionAnswer>? route =
+              ModalRoute.of<PermissionAnswer>(context);
+          if (route != null && route.isActive) {
+            Navigator.of(
+              context,
+            ).removeRoute(route, const PermissionAnswer.reject());
+          }
+        }
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _unregister();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -45,7 +78,7 @@ class _PermissionDialog extends StatelessWidget {
         color: palette.accent,
       ),
       title: Text(
-        '允许「${spec?.name ?? request.toolName}」吗？',
+        '允许「${spec?.name ?? request.displayName}」吗？',
         style: const TextStyle(fontSize: 15.5),
       ),
       content: SizedBox(
@@ -59,6 +92,12 @@ class _PermissionDialog extends StatelessWidget {
               style: TextStyle(fontSize: 12.5, color: palette.text2),
             ),
             const SizedBox(height: 10),
+            if (request.permissionId.startsWith(
+              kMcpPermissionPrefix,
+            )) ...<Widget>[
+              const Text('此 MCP 工具由外部服务器执行，不受工作区门禁限制。'),
+              const SizedBox(height: 10),
+            ],
             // 参数原样给用户看：确认的是"这次这些参数"，只说工具名等于让人
             // 盲签。摘要和事后工具卡片上显示的是同一句（`tool_summary.dart`），
             // 用户才能回头核对自己批准了什么。
@@ -81,7 +120,7 @@ class _PermissionDialog extends StatelessWidget {
             const SizedBox(height: 10),
             Text(
               '「本会话一直允许」只在这个会话里生效，重启后失效。'
-              '要永久改变，去设置页的工具权限。',
+              '要永久改变，去设置页的工具权限或高级功能。',
               style: TextStyle(fontSize: 10.5, color: palette.text3),
             ),
           ],

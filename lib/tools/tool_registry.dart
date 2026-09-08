@@ -6,7 +6,6 @@ import '../core/cancellation_token.dart';
 import '../core/errors.dart';
 import 'permission_gate.dart';
 import 'tool.dart';
-import 'schema_validator.dart';
 import 'workspace/delete_file_tool.dart';
 import 'workspace/edit_file_tool.dart';
 import 'workspace/list_files_tool.dart';
@@ -61,8 +60,7 @@ const List<Tool> kDefaultTools = <Tool>[
 class ToolRegistry {
   ToolRegistry(Iterable<Tool> tools, {PermissionGate? gate})
     : _gate = gate,
-      _byName = <String, Tool>{for (final Tool t in tools) t.name: t},
-      _validator = const ToolSchemaValidator() {
+      _byName = <String, Tool>{for (final Tool t in tools) t.name: t} {
     if (_byName.length != tools.length) {
       final List<String> names = tools.map((Tool t) => t.name).toList()..sort();
       throw StorageError(
@@ -77,7 +75,6 @@ class ToolRegistry {
   static final ToolRegistry empty = ToolRegistry(const <Tool>[]);
 
   final Map<String, Tool> _byName;
-  final ToolSchemaValidator _validator;
   late final List<ToolDefinition> _declarations = (() {
     final List<Tool> sorted = _byName.values.toList()
       ..sort((a, b) => a.name.compareTo(b.name));
@@ -114,29 +111,32 @@ class ToolRegistry {
       return ToolResult.error('没有名为 $name 的工具。可用的工具：${available.join('、')}');
     }
 
-    final String? schemaError = _validator.validate(tool.definition, arguments);
-    if (schemaError != null) return ToolResult.error('工具参数无效：$schemaError');
-
-    if (context.token.isCancelled) return ToolResult.cancelled();
-
-    final PermissionGate? gate = _gate;
-    if (gate != null) {
-      final PermissionVerdict verdict = await gate.authorize(
-        tool: tool,
-        sessionId: context.sessionId,
-        arguments: arguments,
-      );
-      if (!verdict.allowed) return ToolResult.denied(verdict.reason);
-      // 弹窗期间用户可能按了停止。副作用还没发生，这时退出是干净的。
-      if (context.token.isCancelled) return ToolResult.cancelled();
-    }
-
     try {
+      if (context.token.isCancelled) return ToolResult.cancelled();
+      final String? schemaError = await tool.validateArguments(arguments);
+      if (context.token.isCancelled) return ToolResult.cancelled();
+      if (schemaError != null) return ToolResult.error('工具参数无效：$schemaError');
+
+      final PermissionGate? gate = _gate;
+      if (gate != null) {
+        final PermissionVerdict verdict = await gate.authorize(
+          tool: tool,
+          sessionId: context.sessionId,
+          arguments: arguments,
+          token: context.token,
+        );
+        if (!verdict.allowed) return ToolResult.denied(verdict.reason);
+        // 弹窗期间用户可能按了停止。副作用还没发生，这时退出是干净的。
+        if (context.token.isCancelled) return ToolResult.cancelled();
+      }
+
       return await tool.execute(arguments, context);
     } on CancelledException {
       // 中断不是工具的错，但也要作为结果回传：这一轮的 tool_use 必须配一个
       // tool_result，缺了下次请求会被 API 拒（§5-6）。
       return ToolResult.cancelled();
+    } on WepError catch (error) {
+      return ToolResult.error(error.message);
     } on Object {
       // 工具实现里漏掉的异常不能杀掉整个 loop——那会让用户看到一条没有
       // 结果的工具调用，且无法继续对话。

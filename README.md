@@ -23,7 +23,7 @@ Agent 的难点从来不只是发出一次 HTTP 请求，而是让循环在真�
 
 - 流式输出可以增量呈现，也能可靠地收尾。
 - 每个工具调用都有对应结果；失败、拒绝和取消不会把上下文弄坏。
-- 模型只能操作当前会话工作区，路径越界在基础设施层被拦截。
+- 内置文件和脚本工具只能操作当前会话工作区，路径越界在基础设施层被拦截；高级功能中明确启用的 MCP 工具有独立边界。
 - 工具执行经过统一的 Schema 校验、权限门和取消检查。
 - 网络重试、超时、迭代上限和输出预算都是明确的控制流。
 - 会话、工具结果和记忆可以落到本地，进程中断后仍能恢复可理解的状态。
@@ -73,6 +73,7 @@ sequenceDiagram
 
 ### 工具与边界
 
+- **MCP 高级功能**：Android 支持 Streamable HTTP／SSE，Windows 额外支持 stdio；默认关闭，启用时明确提示外部工具不受工作区门禁限制。配置和使用见 [MCP 说明](docs/MCP.md)。
 - **工作区工具**：列出、读取、搜索、新建、编辑和删除文件。
 - **网络与图片工具**：`web_search`、`web_fetch`、`gen_image`、`edit_image`。
 - **全局记忆**：`save_memory`、`list_memory`、`read_memory`、`delete_memory`，由 SQLite 统一持久化。
@@ -159,5 +160,4 @@ flutter test
 ## License
 
 本项目采用 [MIT License](LICENSE)。
-
 

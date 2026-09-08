@@ -8,9 +8,10 @@ import 'stream_event.dart';
 
 /// 工具定义，进请求体的 `tools` 字段。
 ///
-/// [schema] 是受限的 JSON Schema 子集：object / string / number / integer /
+/// 内置工具的 [schema] 是受限的 JSON Schema 子集：object / string / number / integer /
 /// boolean / array / enum / required。**不含** oneOf / anyOf / $ref / 递归
 /// ——协议 §6.2 要求用各家都支持的子集（§7-2）。
+/// MCP 工具保留外部服务器的 schema，并在 MCP 适配层执行完整校验。
 class ToolDefinition {
   const ToolDefinition({
     required this.name,

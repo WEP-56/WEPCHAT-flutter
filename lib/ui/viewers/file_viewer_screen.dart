@@ -113,6 +113,13 @@ class FileViewerScreen extends StatelessWidget {
   }
 
   Widget _buildContent(BuildContext context, FileKind kind) {
+    if (kind == FileKind.other) {
+      return const _Notice(
+        icon: Icons.insert_drive_file_outlined,
+        text: '暂不支持此文件类型的内置预览。可通过上方按钮导出或分享，使用其他应用打开。',
+      );
+    }
+
     if (kind == FileKind.png || kind == FileKind.jpg) {
       final String path = context.sessions.workspacePathFor(
         context.sessions.active.id,

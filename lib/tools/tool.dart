@@ -6,11 +6,14 @@
 /// 就废掉整个 prompt 缓存（§7.1），实现改多少次都没事。
 library;
 
+import 'dart:async';
+
 import '../ai/provider_api.dart';
 import '../core/cancellation_token.dart';
 import '../platform/workspace_guard.dart';
 import '../state/app_settings.dart';
 import '../storage/storage.dart';
+import 'schema_validator.dart';
 
 /// 一次工具执行的收场方式（实施 TODO §7-3）。
 ///
@@ -93,9 +96,11 @@ class ToolContext {
     required this.token,
     this.settings,
     this.storage,
+    this.callId,
   });
 
   final String sessionId;
+  final String? callId;
 
   /// 这个会话工作区的路径守卫。
   ///
@@ -123,6 +128,14 @@ abstract class Tool {
   ToolDefinition get definition;
 
   String get name => definition.name;
+
+  /// Human-readable identity used in permission prompts.
+  String get displayName => name;
+
+  /// Validates arguments once, at dispatch. External protocols may supply a
+  /// standards-compliant validator while built-ins retain their small schema.
+  FutureOr<String?> validateArguments(Map<String, Object?> arguments) =>
+      const ToolSchemaValidator().validate(definition, arguments);
 
   /// 这个工具受哪一条权限设置管（`kToolPermissionSpecs` 里的 id）。
   ///

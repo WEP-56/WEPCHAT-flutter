@@ -32,26 +32,31 @@ class CancellationToken {
     if (_isCancelled) throw CancelledException();
   }
 
-  /// 注册取消回调。立即取消时回调会同步执行。
-  void onCancel(void Function() callback) {
+  /// 注册取消回调，返回解除注册的函数。长连接中的单次请求结束后应解除注册。
+  /// 已取消时回调同步执行。
+  void Function() onCancel(void Function() callback) {
     if (_isCancelled) {
       callback();
     } else {
       _callbacks.add(callback);
     }
+    return () => _callbacks.remove(callback);
   }
 
   void _cancel() {
     if (_isCancelled) return;
     _isCancelled = true;
-    for (final void Function() cb in _callbacks) {
+    final List<void Function()> callbacks = List<void Function()>.of(
+      _callbacks,
+    );
+    _callbacks.clear();
+    for (final void Function() cb in callbacks) {
       try {
         cb();
       } catch (_) {
         // 回调失败不阻止其他回调执行
       }
     }
-    _callbacks.clear();
   }
 }
 

@@ -15,10 +15,14 @@ const int kMaxToolResultChars = 24000;
 ///
 /// 提示写成模型能据此行动的话：它看到"还有 N 字符"才知道要用 `lines`
 /// 分段读，而不是以为文件就这么长。
-String truncateForModel(String text, {int limit = kMaxToolResultChars}) {
+String truncateForModel(
+  String text, {
+  int limit = kMaxToolResultChars,
+  String hint = '需要后续内容请指定范围再读一次',
+}) {
   if (text.length <= limit) return text;
   final int dropped = text.length - limit;
   return '${text.substring(0, limit)}\n\n'
       '[已截断：还有 $dropped 个字符未显示，原始长度 ${text.length}。'
-      '需要后续内容请指定范围再读一次]';
+      '$hint]';
 }

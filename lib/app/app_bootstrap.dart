@@ -95,7 +95,9 @@ class AppBootstrap {
   Future<void>? get disposed => _disposal;
 
   Future<void> _dispose() async {
+    await sessions.shutdown();
     sessions.dispose();
+    await settings.flush();
     settings.dispose();
     await storage.close();
   }

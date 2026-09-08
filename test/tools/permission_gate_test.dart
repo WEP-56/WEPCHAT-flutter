@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:wepchat/core/cancellation_token.dart';
 
 import 'package:wepchat/ai/provider_api.dart';
 import 'package:wepchat/models/settings.dart';
@@ -40,6 +43,30 @@ void main() {
 
   const _FakeTool readTool = _FakeTool('read_file');
   const _FakeTool writeTool = _FakeTool('write_file');
+
+  test('等待用户授权时也能取消，不继续等待悬空弹窗', () async {
+    final Completer<void> prompted = Completer<void>();
+    final CancellationTokenSource source = CancellationTokenSource();
+    final PermissionGate gate = PermissionGate(
+      settings: settings,
+      prompt: (_) {
+        prompted.complete();
+        return Completer<PermissionAnswer?>().future;
+      },
+    );
+    final Future<void> expectation = expectLater(
+      gate.authorize(
+        tool: writeTool,
+        sessionId: 's',
+        arguments: <String, Object?>{},
+        token: source.token,
+      ),
+      throwsA(isA<CancelledException>()),
+    );
+    await prompted.future;
+    source.cancel();
+    await expectation;
+  });
 
   Future<PermissionVerdict> authorize(
     PermissionGate gate,

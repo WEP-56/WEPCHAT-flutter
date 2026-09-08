@@ -1,20 +1,12 @@
 // ignore_for_file: curly_braces_in_flow_control_structures
 import 'package:flutter/material.dart';
 import '../core/ulid.dart';
+import '../tools/tool_permission.dart';
+
+export '../tools/tool_permission.dart';
 
 /// 工作区根目录默认值。真实路径在首次用到时由 `wep_storage` 解析成绝对路径。
 const String kDefaultWorkspaceRoot = r'~/WePChat/workspaces';
-
-/// 单个工具的全局权限。作用于所有会话，不提供会话级特例（功能协议 §9）。
-enum ToolPermission {
-  denied('禁止'),
-  ask('询问'),
-  allowed('允许');
-
-  const ToolPermission(this.label);
-
-  final String label;
-}
 
 /// 记忆总开关三档（功能协议 §7.3）。
 enum MemoryMode {

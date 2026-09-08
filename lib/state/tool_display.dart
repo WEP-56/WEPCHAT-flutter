@@ -33,6 +33,7 @@ ToolKind toolKindOf(String name) {
 
 /// 工具名 → 卡片标题。模型看到的是英文名，用户看到的应该是中文。
 String toolTitleOf(String name) {
+  if (name.startsWith('mcp_')) return 'MCP 工具';
   return switch (name) {
     'list_files' => '列出文件',
     'search_files' => '搜索文件',
@@ -110,7 +111,7 @@ ToolCall _buildToolCall({
   return ToolCall(
     id: id,
     kind: toolKindOf(name),
-    title: toolTitleOf(name),
+    title: ui['title'] is String ? ui['title']! as String : toolTitleOf(name),
     meta: summarizeToolArguments(arguments),
     detail: _detailOf(result),
     file: _filePath(name, ui),
