@@ -53,6 +53,10 @@ class _SessionListPanelState extends State<SessionListPanel> {
             _buildHeader(context, store),
             Padding(
               padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+              child: _buildNewSessionButton(context, store),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
               child: _buildSearch(palette),
             ),
             Expanded(
@@ -76,27 +80,16 @@ class _SessionListPanelState extends State<SessionListPanel> {
       padding: const EdgeInsets.fromLTRB(14, 10, 8, 8),
       child: Row(
         children: <Widget>[
-          Expanded(
-            child: Text(
-              'WePChat',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.2,
-                color: palette.text1,
-              ),
+          Text(
+            'WePChat',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.2,
+              color: palette.text1,
             ),
           ),
-          IconAction(
-            icon: Icons.add,
-            tooltip: '新建会话',
-            onTap: () {
-              store.createSession(
-                model: context.settings.resolvedDefaultModelKey,
-              );
-              widget.onNavigate?.call();
-            },
-          ),
+          const Spacer(),
           if (widget.onCollapse != null)
             IconAction(
               icon: widget.collapseIcon ?? Icons.chevron_left,
@@ -104,6 +97,45 @@ class _SessionListPanelState extends State<SessionListPanel> {
               onTap: widget.onCollapse!,
             ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildNewSessionButton(BuildContext context, SessionStore store) {
+    final AppPalette palette = context.palette;
+    final Color foreground = Theme.of(context).colorScheme.onPrimary;
+    return Tooltip(
+      message: '新建会话',
+      child: Material(
+        color: palette.accent,
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          onTap: () {
+            store.createSession(
+              model: context.settings.resolvedDefaultModelKey,
+            );
+            widget.onNavigate?.call();
+          },
+          borderRadius: BorderRadius.circular(8),
+          child: SizedBox(
+            height: 32,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                Icon(Icons.add, size: 16, color: foreground),
+                const SizedBox(width: 6),
+                Text(
+                  '新建会话',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: foreground,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

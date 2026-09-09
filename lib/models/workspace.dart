@@ -43,6 +43,7 @@ class WorkspaceFile {
     required this.kind,
     required this.size,
     required this.time,
+    this.isDirectory = false,
   });
 
   /// 工作区内的相对路径，例如 `images/cover_v1.png`。
@@ -54,6 +55,12 @@ class WorkspaceFile {
 
   /// 展示用的修改时间文本。
   final String time;
+
+  /// Whether this entry is a directory rather than a file.
+  ///
+  /// Directories use [FileKind.other] because their name must not influence
+  /// file type detection.
+  final bool isDirectory;
 
   bool get isImage => kind == FileKind.png || kind == FileKind.jpg;
 }

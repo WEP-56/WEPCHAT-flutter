@@ -537,6 +537,7 @@ class SessionStore extends ChangeNotifier {
     final String workspacePath = _workspaces.pathFor(sessionId);
     final List<WorkspaceFile> files = await scanWorkspaceDirectory(
       workspacePath,
+      includeDirectories: true,
     );
     final ChatSession withFiles = updated.copyWith(files: files);
 
@@ -577,6 +578,7 @@ class SessionStore extends ChangeNotifier {
       final String workspacePath = workspaces.pathFor(summary.id);
       final List<WorkspaceFile> files = await scanWorkspaceDirectory(
         workspacePath,
+        includeDirectories: true,
       );
       result.add(session.copyWith(files: files));
     }

@@ -43,6 +43,8 @@ class WorkspacePanel extends StatefulWidget {
 
 class _WorkspacePanelState extends State<WorkspacePanel> {
   _WorkspaceTab _tab = _WorkspaceTab.files;
+  final Map<String, Set<String>> _expandedDirectoriesBySession =
+      <String, Set<String>>{};
 
   @override
   Widget build(BuildContext context) {
@@ -70,7 +72,12 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
-                _buildHeader(context, session.files.length),
+                _buildHeader(
+                  context,
+                  session.files
+                      .where((WorkspaceFile f) => !f.isDirectory)
+                      .length,
+                ),
                 _buildPathChip(context, path),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
@@ -91,10 +98,7 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
                 ),
                 Expanded(
                   child: switch (_tab) {
-                    _WorkspaceTab.files => _buildFileList(
-                      context,
-                      session.files,
-                    ),
+                    _WorkspaceTab.files => _buildFileList(session),
                     _WorkspaceTab.images => _buildImageGrid(context, images),
                   },
                 ),
@@ -128,6 +132,11 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
             style: TextStyle(fontSize: 10.5, color: palette.text3),
           ),
           const Spacer(),
+          IconAction(
+            icon: Icons.refresh,
+            tooltip: '刷新工作区',
+            onTap: () => _refresh(context),
+          ),
           IconAction(
             icon: Icons.upload_file_outlined,
             tooltip: '上传文件',
@@ -190,20 +199,76 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
     );
   }
 
-  Widget _buildFileList(BuildContext context, List<WorkspaceFile> files) {
-    if (files.isEmpty) return const _EmptyHint('本次会话还没有产物');
+  Widget _buildFileList(ChatSession session) {
+    if (session.files.isEmpty) return const _EmptyHint('本次会话还没有产物');
+    final List<WorkspaceFile> entries = _visibleEntries(session);
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-      itemCount: files.length,
+      itemCount: entries.length,
       itemBuilder: (BuildContext context, int index) {
-        return _FileRow(file: files[index]);
+        final WorkspaceFile file = entries[index];
+        return file.isDirectory
+            ? _DirectoryRow(
+                file: file,
+                collapsed: !_expandedDirectories(
+                  session.id,
+                ).contains(file.name),
+                onTap: () => _toggleDirectory(session.id, file.name),
+              )
+            : _FileRow(file: file, depth: _workspaceEntryDepth(file.name));
       },
     );
+  }
+
+  List<WorkspaceFile> _visibleEntries(ChatSession session) {
+    final List<WorkspaceFile> entries = List<WorkspaceFile>.of(session.files)
+      ..sort(_compareEntries);
+    final Set<String> expanded = _expandedDirectories(session.id);
+    return entries.where((WorkspaceFile entry) {
+      final List<String> parts = entry.name.split('/');
+      for (int i = 1; i < parts.length; i++) {
+        if (!expanded.contains(parts.sublist(0, i).join('/'))) return false;
+      }
+      return true;
+    }).toList();
+  }
+
+  Set<String> _expandedDirectories(String sessionId) =>
+      _expandedDirectoriesBySession.putIfAbsent(sessionId, () => <String>{});
+
+  void _toggleDirectory(String sessionId, String path) {
+    setState(() {
+      final Set<String> expanded = _expandedDirectories(sessionId);
+      if (!expanded.add(path)) expanded.remove(path);
+    });
+  }
+
+  static int _compareEntries(WorkspaceFile a, WorkspaceFile b) {
+    final List<String> aParts = a.name.split('/');
+    final List<String> bParts = b.name.split('/');
+    final int length = aParts.length < bParts.length
+        ? aParts.length
+        : bParts.length;
+    for (int i = 0; i < length; i++) {
+      final int byName = aParts[i].toLowerCase().compareTo(
+        bParts[i].toLowerCase(),
+      );
+      if (byName != 0) return byName;
+    }
+    if (aParts.length != bParts.length) return aParts.length - bParts.length;
+    if (a.isDirectory != b.isDirectory) return a.isDirectory ? -1 : 1;
+    return a.name.compareTo(b.name);
   }
 
   WorkspaceFileService _service(BuildContext context) => WorkspaceFileService(
     context.sessions.workspacePathFor(context.sessions.active.id),
   );
+
+  Future<void> _refresh(BuildContext context) async {
+    await context.sessions.refreshWorkspace();
+    if (!context.mounted) return;
+    showAppToast(context, '工作区已刷新');
+  }
 
   Future<void> _upload(BuildContext context) async {
     final SessionStore store = context.sessions;
@@ -343,9 +408,10 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
 }
 
 class _FileRow extends StatelessWidget {
-  const _FileRow({required this.file});
+  const _FileRow({required this.file, this.depth = 0});
 
   final WorkspaceFile file;
+  final int depth;
 
   @override
   Widget build(BuildContext context) {
@@ -379,7 +445,7 @@ class _FileRow extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         hoverColor: palette.hover,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+          padding: EdgeInsets.fromLTRB(6 + depth * 14, 6, 6, 6),
           child: Row(
             children: <Widget>[
               FileIconBox(kind: file.kind, size: 26, radius: 6),
@@ -424,6 +490,60 @@ class _FileRow extends StatelessWidget {
     );
   }
 }
+
+class _DirectoryRow extends StatelessWidget {
+  const _DirectoryRow({
+    required this.file,
+    required this.collapsed,
+    required this.onTap,
+  });
+
+  final WorkspaceFile file;
+  final bool collapsed;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppPalette palette = context.palette;
+    final int depth = _workspaceEntryDepth(file.name);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      hoverColor: palette.hover,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(6 + depth * 14, 6, 6, 6),
+        child: Row(
+          children: <Widget>[
+            Icon(
+              collapsed ? Icons.chevron_right : Icons.expand_more,
+              size: 16,
+              color: palette.text2,
+            ),
+            Icon(
+              collapsed ? Icons.folder_outlined : Icons.folder_open_outlined,
+              size: 24,
+              color: palette.accent,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                file.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppFonts.mono(
+                  size: 11.5,
+                  color: palette.text1,
+                ).copyWith(fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+int _workspaceEntryDepth(String name) => '/'.allMatches(name).length;
 
 Future<void> _shareWorkspaceFile(
   BuildContext context,

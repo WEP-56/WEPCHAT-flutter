@@ -78,4 +78,29 @@ void main() {
       for (final WorkspaceFile file in files) file.name: file.kind,
     }, expected);
   });
+
+  test('可选地返回空目录，供工作区文件树展示', () async {
+    await Directory(
+      p.join(workspace.path, 'assets', 'icons'),
+    ).create(recursive: true);
+    await addFile('assets/readme.txt');
+
+    final List<WorkspaceFile> entries = await scanWorkspaceDirectory(
+      workspace.path,
+      includeDirectories: true,
+    );
+
+    expect(
+      entries
+          .where((WorkspaceFile entry) => entry.isDirectory)
+          .map((WorkspaceFile entry) => entry.name),
+      unorderedEquals(<String>['assets', 'assets/icons']),
+    );
+    expect(
+      entries
+          .where((WorkspaceFile entry) => !entry.isDirectory)
+          .map((WorkspaceFile entry) => entry.name),
+      contains('assets/readme.txt'),
+    );
+  });
 }
