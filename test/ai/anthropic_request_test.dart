@@ -488,6 +488,83 @@ void main() {
       );
     });
   });
+
+  group('同角色相邻（排队式引导 §10.4）', () {
+    test('工具结果后面紧跟用户插话时合成一条 user 消息', () {
+      final Map<String, Object?> body = buildAnthropicRequest(
+        ProviderRequest(
+          model: _noCache,
+          messages: <ChatMessageModel>[
+            ChatMessageModel.user('帮我查一下'),
+            const ChatMessageModel(
+              role: MessageRole.assistant,
+              parts: <ContentPart>[
+                ToolCallPart(
+                  id: 'call-1',
+                  name: 'read_file',
+                  arguments: <String, Object?>{'path': 'a.md'},
+                ),
+              ],
+              stopReason: StopReason.toolUse,
+            ),
+            const ChatMessageModel(
+              role: MessageRole.tool,
+              parts: <ContentPart>[
+                ToolResultPart(
+                  callId: 'call-1',
+                  name: 'read_file',
+                  content: '原文',
+                ),
+              ],
+            ),
+            // 用户在工具执行期间插的话，注入点就在工具结果之后。
+            ChatMessageModel.user('改成英文'),
+          ],
+        ),
+      );
+
+      final List<Object?> messages = body['messages'] as List<Object?>;
+
+      // anthropic 要求 user / assistant 交替：tool_result 和紧随其后的插话
+      // 必须是同一条 user 消息，分开就会被 API 拒绝。
+      expect(messages.length, equals(3));
+      expect((messages[1] as Map<String, Object?>)['role'], equals('assistant'));
+
+      final Map<String, Object?> last =
+          messages[2] as Map<String, Object?>;
+      expect(last['role'], equals('user'));
+      final List<Object?> blocks = last['content'] as List<Object?>;
+      expect(blocks.length, equals(2));
+      // tool_result 必须排在 text 前面，顺序反了 anthropic 也会报错。
+      expect((blocks[0] as Map<String, Object?>)['type'], equals('tool_result'));
+      expect((blocks[1] as Map<String, Object?>)['type'], equals('text'));
+      expect((blocks[1] as Map<String, Object?>)['text'], equals('改成英文'));
+    });
+
+    test('同一检查点插了两句时合成一条 user 消息且保持顺序', () {
+      final Map<String, Object?> body = buildAnthropicRequest(
+        ProviderRequest(
+          model: _noCache,
+          messages: <ChatMessageModel>[
+            ChatMessageModel.user('第一句'),
+            ChatMessageModel.user('第二句'),
+            ChatMessageModel.user('第三句'),
+          ],
+        ),
+      );
+
+      final List<Object?> messages = body['messages'] as List<Object?>;
+      expect(messages.length, equals(1));
+      expect(
+        (messages.single as Map<String, Object?>)['content'],
+        equals(<Object?>[
+          <String, Object?>{'type': 'text', 'text': '第一句'},
+          <String, Object?>{'type': 'text', 'text': '第二句'},
+          <String, Object?>{'type': 'text', 'text': '第三句'},
+        ]),
+      );
+    });
+  });
 }
 
 bool _hasCacheControl(Object? message) {

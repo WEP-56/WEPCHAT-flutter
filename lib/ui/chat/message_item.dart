@@ -103,7 +103,12 @@ class _MessageItemViewState extends State<MessageItemView> {
             ),
           ),
         ),
-        _actionBar(alignEnd: true),
+        if (message.queued)
+          // 排队的消息还没落进这一轮上下文，复制/编辑/重发都无从谈起
+          // （操作栏那些按钮要靠 `seq` 找落点）。只留一个状态说明。
+          const _QueuedLabel()
+        else
+          _actionBar(alignEnd: true),
       ],
     );
   }
@@ -194,6 +199,34 @@ class _MessageItemViewState extends State<MessageItemView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: children,
+    );
+  }
+}
+
+/// 「排队中」标记。
+///
+/// 生成期间用户打的字不会立刻发请求——正在跑的工具不能半途打断，等上一批
+/// 工具全部执行完才并进上下文（协议 §10.4）。这条标记就是让用户知道
+/// "还没轮到它"，否则会以为消息发丢了。
+class _QueuedLabel extends StatelessWidget {
+  const _QueuedLabel();
+
+  @override
+  Widget build(BuildContext context) {
+    final AppPalette palette = context.palette;
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, right: 4),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(Icons.schedule, size: 11, color: palette.text3),
+          const SizedBox(width: 4),
+          Text(
+            '排队中 · 这一步做完就发过去',
+            style: TextStyle(fontSize: 10.5, color: palette.text3),
+          ),
+        ],
+      ),
     );
   }
 }

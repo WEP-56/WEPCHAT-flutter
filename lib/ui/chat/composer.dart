@@ -52,9 +52,14 @@ class _ComposerState extends State<Composer> {
     super.dispose();
   }
 
+  /// 取出输入框内容发给会话。
+  ///
+  /// 生成中也允许发送：这时它是排队式引导（协议 §10.4）——话先存下来，
+  /// 等上一批工具跑完再并进上下文。丢掉用户刚打的字是最糟的处理方式，
+  /// 而"再打一遍"要用户记住自己说过什么。
   void _submit() {
     final String text = _controller.text.trim();
-    if ((text.isEmpty && _attachments.isEmpty) || widget.isGenerating) return;
+    if (text.isEmpty && _attachments.isEmpty) return;
     _controller.clear();
     widget.onSend(text, List<PendingAttachment>.unmodifiable(_attachments));
     setState(_attachments.clear);
@@ -236,7 +241,9 @@ class _ComposerState extends State<Composer> {
                               enabledBorder: InputBorder.none,
                               focusedBorder: InputBorder.none,
                               filled: false,
-                              hintText: '给 WePChat 发消息…',
+                              hintText: widget.isGenerating
+                                  ? '补充一句，这一步做完就发过去…'
+                                  : '给 WePChat 发消息…',
                               hintStyle: TextStyle(
                                 fontSize: 13.5,
                                 color: palette.text3,
@@ -250,33 +257,37 @@ class _ComposerState extends State<Composer> {
                         ),
                       ),
                       const SizedBox(width: 4),
-                      widget.isGenerating
-                          ? _RoundButton(
-                              icon: Icons.stop,
-                              tooltip: '停止生成',
-                              background: palette.bgRaise2,
-                              foreground: palette.text1,
-                              onTap: widget.onStop,
-                            )
-                          : ListenableBuilder(
-                              listenable: _controller,
-                              builder: (BuildContext context, Widget? _) {
-                                final bool ready =
-                                    _controller.text.trim().isNotEmpty ||
-                                    _attachments.isNotEmpty;
-                                return _RoundButton(
-                                  icon: Icons.arrow_upward,
-                                  tooltip: '发送',
-                                  background: ready
-                                      ? palette.accent
-                                      : palette.bgRaise2,
-                                  foreground: ready
-                                      ? Colors.white
-                                      : palette.text3,
-                                  onTap: ready ? _submit : null,
-                                );
-                              },
-                            ),
+                      // 生成中两个按钮并存：停止是"别说了"，发送是"再补一句
+                      // （等这一步做完）"。只剩停止按钮的话，用户想插话就
+                      // 只能先停掉，代价是丢掉已经跑了一半的工作。
+                      if (widget.isGenerating)
+                        _RoundButton(
+                          icon: Icons.stop,
+                          tooltip: '停止生成',
+                          background: palette.bgRaise2,
+                          foreground: palette.text1,
+                          onTap: widget.onStop,
+                        ),
+                      const SizedBox(width: 4),
+                      ListenableBuilder(
+                        listenable: _controller,
+                        builder: (BuildContext context, Widget? _) {
+                          final bool ready =
+                              _controller.text.trim().isNotEmpty ||
+                              _attachments.isNotEmpty;
+                          return _RoundButton(
+                            icon: Icons.arrow_upward,
+                            tooltip: widget.isGenerating
+                                ? '插一句（等这一步做完）'
+                                : '发送',
+                            background: ready
+                                ? palette.accent
+                                : palette.bgRaise2,
+                            foreground: ready ? Colors.white : palette.text3,
+                            onTap: ready ? _submit : null,
+                          );
+                        },
+                      ),
                     ],
                   ),
                   decoration: BoxDecoration(
@@ -311,7 +322,9 @@ class _ComposerState extends State<Composer> {
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
                   child: Text(
-                    'Enter 发送 · Shift+Enter 换行 · 内容由模型生成，请自行核对',
+                    widget.isGenerating
+                        ? '正在生成 · 现在发的话会排队，等正在跑的工具做完再交过去'
+                        : 'Enter 发送 · Shift+Enter 换行 · 内容由模型生成，请自行核对',
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 10.5, color: palette.text3),
                   ),

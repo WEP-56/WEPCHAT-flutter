@@ -97,19 +97,11 @@ ChatMessage _toChatMessage(EntryRecord entry) {
   if (rawAttachments is List) {
     for (final Object? raw in rawAttachments) {
       if (raw is! Map<String, Object?> || raw['name'] is! String) continue;
-      final String name = raw['name'] as String;
-      final String mime = raw['mimeType'] as String? ?? '';
-      final String? base64 = raw['base64'] as String?;
-      final FileKind kind = mime.startsWith('image/')
-          ? FileKind.png
-          : FileKind.txt;
       attachments.add(
-        Attachment(
-          name: name,
-          size: '附件',
-          kind: kind,
-          base64Data: base64,
-          mimeType: mime,
+        _displayAttachment(
+          name: raw['name'] as String,
+          mimeType: raw['mimeType'] as String? ?? '',
+          base64Data: raw['base64'] as String?,
         ),
       );
     }
@@ -214,4 +206,75 @@ String _timeLabel(DateTime dt) {
   final String hh = dt.hour.toString().padLeft(2, '0');
   final String mm = dt.minute.toString().padLeft(2, '0');
   return '$hh:$mm';
+}
+
+/// 用户消息条目的 payload。
+///
+/// 普通发送和排队式引导共用这一份：两种用户消息在库里长得不一样的话，
+/// 读历史就得写两套还原逻辑——而它们的区别只在"什么时候被送出去"。
+Map<String, Object?> _userEntryPayload(
+  String text,
+  List<PendingAttachment> attachments,
+) {
+  return <String, Object?>{
+    'text': text,
+    if (attachments.isNotEmpty)
+      'attachments': <Map<String, Object?>>[
+        for (final PendingAttachment a in attachments)
+          <String, Object?>{
+            'name': a.name,
+            'mimeType': a.mimeType,
+            'base64': base64Encode(a.bytes),
+          },
+      ],
+  };
+}
+
+/// 用户消息 payload → 请求层消息；既没文字也没附件时返回 null。
+///
+/// 读历史和排队式引导都走这里：同一个 payload 必须还原成同一条消息，
+/// 否则"排进队列的这一次"和"下次重开读历史"模型看到的东西会不一样。
+ai.ChatMessageModel? _userMessageOf(Map<String, Object?> payload) {
+  final String text = payload['text'] as String? ?? '';
+  final List<ai.ContentPart> parts = <ai.ContentPart>[ai.TextPart(text)];
+  final Object? rawAttachments = payload['attachments'];
+  if (rawAttachments is List) {
+    for (final Object? raw in rawAttachments) {
+      if (raw is! Map<String, Object?>) continue;
+      final String? b64 = raw['base64'] as String?;
+      final String? mime = raw['mimeType'] as String?;
+      final String name = raw['name'] as String? ?? 'attachment';
+      if (b64 == null || mime == null) continue;
+      if (mime.startsWith('image/')) {
+        parts.add(ai.ImagePart(base64Data: b64, mimeType: mime));
+      } else {
+        // 文本/代码附件必须作为文本进入模型上下文；将其伪装成
+        // ImagePart 会让 provider 请求体违反图片输入协议。
+        try {
+          final String content = utf8.decode(base64Decode(b64));
+          parts.add(ai.TextPart('\n\n附件 `$name`（$mime）：\n```\n$content\n```'));
+        } on FormatException {
+          // 二进制附件暂不上传给模型，保留文件名让模型知道其存在。
+          parts.add(ai.TextPart('\n\n附件 `$name`（$mime，二进制内容未展开）。'));
+        }
+      }
+    }
+  }
+  if (text.isEmpty && parts.length <= 1) return null;
+  return ai.ChatMessageModel(role: ai.MessageRole.user, parts: parts);
+}
+
+/// 附件在界面上长什么样，只有这一处说了算。
+Attachment _displayAttachment({
+  required String name,
+  required String mimeType,
+  String? base64Data,
+}) {
+  return Attachment(
+    name: name,
+    size: '附件',
+    kind: mimeType.startsWith('image/') ? FileKind.png : FileKind.txt,
+    base64Data: base64Data,
+    mimeType: mimeType,
+  );
 }

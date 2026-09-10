@@ -68,15 +68,19 @@ class TurnRunner {
   final String _sessionId;
   final void Function(TurnDraft) _paint;
 
-  final String _bubbleId = Ulid.generate();
+  /// 当前流式气泡的 id。整段生成只生成一次：每帧换 id 会让 ListView 认为是
+  /// 新元素，打字过程中整条消息会闪。用户插话时才换一次——那一轮被切成了
+  /// 两段，前一段的话得留在用户那句话上面。
+  String _bubbleId = Ulid.generate();
   final List<ToolCall> _cards = <ToolCall>[];
   final Map<String, DateTime> _startedAt = <String, DateTime>{};
 
   /// 本轮开始的时刻，用来算落库时写进 payload 的耗时。
   ///
   /// 取构造时刻而不是 `run()` 的第一行：调用方就是在发请求前一步 new 出来的，
-  /// 而字段初始化不会被 `await` 推迟。
-  final DateTime _turnStartedAt = DateTime.now();
+  /// 而字段初始化不会被 `await` 推迟。用户插话时重置一次——那一轮被切成了
+  /// 两段，第二段的耗时不该把第一段的算进去。
+  DateTime _turnStartedAt = DateTime.now();
 
   ai.ChatMessageModel? _lastAssistant;
   ai.TokenUsage _usage = const ai.TokenUsage();
@@ -124,6 +128,16 @@ class TurnRunner {
           :final ToolResult result,
         ):
           await _finishTool(call, result);
+
+        case AgentInputInjected():
+          // 用户插话把这一轮切成了两段。上一段的气泡就地定格：换掉 id 之后
+          // `_paintDraft` 不再碰它，下一帧顺手收掉它的光标（排队消息已经
+          // 由 `SessionStore` 转成普通用户消息）。不换的话，助手后面吐的字
+          // 会和前一段挤在同一条气泡里，还会跑到用户那句话**上面**去。
+          _bubbleId = Ulid.generate();
+          _cards.clear();
+          _lastAssistant = null;
+          _turnStartedAt = DateTime.now();
 
         case AgentDone():
           reason = event.stopReason;

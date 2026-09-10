@@ -33,6 +33,7 @@ class AgentConfig {
     this.maxOutputTokensTotal,
     this.parallelToolCalls = true,
     this.retryPolicy = const ProviderRetryPolicy(),
+    this.takePendingInputs,
   });
 
   final ModelSpec model;
@@ -62,15 +63,29 @@ class AgentConfig {
   final int? maxOutputTokensTotal;
   final bool parallelToolCalls;
   final ProviderRetryPolicy retryPolicy;
+
+  /// 取走排队中的用户输入（排队式引导，协议 §10.4）。
+  ///
+  /// loop 在可以安全插话的检查点调用它：即将发请求之前，以及模型本来要
+  /// 收场之前。返回空列表表示没有插话。
+  ///
+  /// **取走即用**：返回的这批会被立刻并进历史并发注入事件，loop 不会替你
+  /// 存着（存着就有"取出来了却因为取消而没送出去"的空窗期）。所以队列里
+  /// 的东西一旦返回就等于交给了 loop。
+  ///
+  /// 队列不由 loop 持有：谁在跑、界面怎么显示、条目落到哪都是会话状态，
+  /// loop 只负责在正确的时机把它取过来并进历史。为 null 就是不支持插话。
+  final List<ChatMessageModel> Function()? takePendingInputs;
 }
 
 /// 把「一次用户输入」跑成「若干次 API 调用 + 工具执行」。
 ///
 /// 循环结构（§5-1）：
-/// 1. 带历史发请求
-/// 2. 流式收 assistant 消息
-/// 3. 若 `stopReason` 是 toolUse：执行全部工具，结果拼成一条 tool 消息进历史，回到 1
-/// 4. 否则结束
+/// 1. 把排队中的用户输入并进历史（排队式引导，协议 §10.4）
+/// 2. 带历史发请求
+/// 3. 流式收 assistant 消息
+/// 4. 若 `stopReason` 是 toolUse：执行全部工具，结果拼成一条 tool 消息进历史，回到 1
+/// 5. 否则结束
 class AgentLoop {
   AgentLoop({
     required ProviderApi api,
@@ -114,6 +129,20 @@ class AgentLoop {
       if (token.isCancelled) {
         yield AgentDone(stopReason: StopReason.aborted, usage: total);
         return;
+      }
+
+      // 插话注入点（协议 §10.4）：用户在上一批工具执行期间打的话，到这里
+      // 才并进历史。工具已经全部跑完，模型看到的是一个完整的工具结果 +
+      // 一句新要求，可以继续，也可以据此重新规划。
+      //
+      // 取走之后**立刻**并进历史并发注入事件：不能攒着等下一轮开头再注入，
+      // 那样中间的取消/超时会让这一批"已经出队却没人用"——界面上的排队标记
+      // 已经撤了，模型却没看见（见 _takeSteering 的注释）。
+      final List<ChatMessageModel> injected =
+          _config.takePendingInputs?.call() ?? const <ChatMessageModel>[];
+      for (final ChatMessageModel message in injected) {
+        messages.add(message);
+        yield AgentInputInjected(message: message, iteration: iteration);
       }
 
       yield AgentTurnStart(iteration: iteration);
@@ -210,6 +239,27 @@ class AgentLoop {
         messages.add(
           ChatMessageModel(role: MessageRole.tool, parts: truncatedResults),
         );
+        // 用户按了停止：用户自己的动作优先于任何收场判词，直接以中断收尾。
+        if (token.isCancelled) {
+          yield AgentDone(stopReason: StopReason.aborted, usage: total);
+          return;
+        }
+        // 该收场了，但先看一眼队列：用户可能正好在这批工具跑完时插了话，
+        // 有就带上去下一轮（协议 §10.4），没有才真的收场。
+        final List<ChatMessageModel>? pending = _takeSteering(
+          iteration: iteration,
+          turnLimit: turnLimit,
+        );
+        if (pending != null) {
+          for (final ChatMessageModel message in pending) {
+            messages.add(message);
+            yield AgentInputInjected(
+              message: message,
+              iteration: iteration + 1,
+            );
+          }
+          continue;
+        }
         yield AgentDone(
           stopReason: StopReason.length,
           usage: total,
@@ -219,6 +269,24 @@ class AgentLoop {
       }
 
       if (reason != StopReason.toolUse) {
+        if (token.isCancelled) {
+          yield AgentDone(stopReason: StopReason.aborted, usage: total);
+          return;
+        }
+        final List<ChatMessageModel>? pending = _takeSteering(
+          iteration: iteration,
+          turnLimit: turnLimit,
+        );
+        if (pending != null) {
+          for (final ChatMessageModel message in pending) {
+            messages.add(message);
+            yield AgentInputInjected(
+              message: message,
+              iteration: iteration + 1,
+            );
+          }
+          continue;
+        }
         yield AgentDone(
           stopReason: reason,
           usage: total,
@@ -297,5 +365,24 @@ class AgentLoop {
       hitMaxIterations: true,
       errorMessage: '达到迭代上限 ${_config.maxIterations} 次，已停止',
     );
+  }
+
+  /// 模型本来要收场时，再查一次插话队列（协议 §10.4）。
+  ///
+  /// 取到就返回那一批，调用方就地并进历史、发注入事件，然后进入下一轮；
+  /// 返回 null 表示"没人插话（或此刻不该取），该收场了"。
+  ///
+  /// 最后一轮不取：取出来也没有下一轮能注入，消息会从这一轮凭空消失。这种
+  /// 情况留在队列里交给会话层收尾——条目在按下发送时就已经落库，下次读历史
+  /// 自然会带上，会话层还会给用户一句"没赶上这一轮"的提示（见
+  /// `session_generation.dart` 的 finally）。
+  List<ChatMessageModel>? _takeSteering({
+    required int iteration,
+    required int turnLimit,
+  }) {
+    if (iteration >= turnLimit) return null;
+    final List<ChatMessageModel> pending =
+        _config.takePendingInputs?.call() ?? const <ChatMessageModel>[];
+    return pending.isEmpty ? null : pending;
   }
 }

@@ -288,13 +288,29 @@ class SessionStore extends ChangeNotifier {
   }
 
   /// 发一条新消息：落库 + 请模型回复。
+  ///
+  /// 如果**当前会话**正在生成，改走排队式引导（协议 §10.4）：消息先落库、
+  /// 再进队列，等上一批工具全部执行完才并进上下文。中途打断正在跑的工具
+  /// 是不行的——副作用已经发生，模型却看不到结果，等于留下一个没有下文的
+  /// 操作。
+  ///
+  /// 生成的是**别的**会话就照旧丢弃：插话只对"用户正看着的这一轮"有意义，
+  /// 把 A 会话的话塞进 B 会话的历史不是用户的意思。全局单 run 是刻意简化
+  /// （见 [_run]），这条分支不改那个决定。
   Future<void> sendMessage(
     String text, {
     List<PendingAttachment> attachments = const <PendingAttachment>[],
   }) async {
     final String trimmed = text.trim();
     if (trimmed.isEmpty && attachments.isEmpty) return;
-    if (_run != null) return; // 同时只跑一个。
+
+    final _RunState? run = _run;
+    if (run != null) {
+      if (run.sessionId == _activeId) {
+        await _queueSteering(run, trimmed, attachments: attachments);
+      }
+      return;
+    }
 
     final ChatSession session = active;
     await _askWithUserMessage(
@@ -303,6 +319,121 @@ class SessionStore extends ChangeNotifier {
       attachments: attachments,
       isFirst: session.messages.isEmpty,
     );
+  }
+
+  /// 生成中收下一条用户输入，排队等下一次安全注入点（协议 §10.4）。
+  ///
+  /// **先落库再入队**：用户按了发送，这条消息就不该有丢失的路径——和
+  /// [_askWithUserMessage] 同一条理由。落库用的是和普通用户消息同一套
+  /// payload，所以它本来就会出现在以后每一轮的上下文里；队列只负责让
+  /// **这一次**运行也看到它。
+  Future<void> _queueSteering(
+    _RunState run,
+    String text, {
+    required List<PendingAttachment> attachments,
+  }) async {
+    final Map<String, Object?> payload = _userEntryPayload(text, attachments);
+    final String entryId = Ulid.generate();
+    await _storage.appendEntry(
+      run.sessionId,
+      NewEntry(
+        id: entryId,
+        type: EntryType.message,
+        role: EntryRole.user,
+        payload: payload,
+      ),
+      preview: text,
+    );
+
+    // sendMessage 已经挡掉"既没文字也没附件"，这里必然还原得出一条消息。
+    run.queue.add(
+      _QueuedInput(
+        entryId: entryId,
+        message: _userMessageOf(payload)!,
+      ),
+    );
+
+    _insertQueuedBubble(run.sessionId, entryId, text, attachments);
+  }
+
+  /// 在界面上插一条"排队中"气泡，排在流式草稿下面。
+  ///
+  /// 不 `_reload`：reload 会把正在生成的草稿整条冲掉，而这轮还没结束。
+  void _insertQueuedBubble(
+    String sessionId,
+    String entryId,
+    String text,
+    List<PendingAttachment> attachments,
+  ) {
+    final int index = _sessions.indexWhere((ChatSession s) => s.id == sessionId);
+    if (index < 0) return;
+
+    final ChatSession session = _sessions[index];
+    final ChatMessage bubble = ChatMessage(
+      id: entryId,
+      role: ChatRole.user,
+      time: _timeLabel(DateTime.now()),
+      rawText: text,
+      queued: true,
+      attachments: <Attachment>[
+        for (final PendingAttachment a in attachments)
+          _displayAttachment(
+            name: a.name,
+            mimeType: a.mimeType,
+            base64Data: base64Encode(a.bytes),
+          ),
+      ],
+      blocks: text.isEmpty
+          ? const <ContentBlock>[]
+          : <ContentBlock>[ParagraphBlock(text)],
+    );
+
+    _sessions = List<ChatSession>.of(_sessions)
+      ..[index] = session.copyWith(
+        messages: <ChatMessage>[...session.messages, bubble],
+      );
+    notifyListeners();
+  }
+
+  /// loop 在安全注入点取走排队输入（协议 §10.4）。
+  ///
+  /// 取走的同时把那些气泡转成普通用户消息——它们已经交给模型了，再挂着
+  /// "排队中"就是在骗用户。
+  List<ai.ChatMessageModel> takeQueuedInputs(_RunState run) {
+    if (run.queue.isEmpty) return const <ai.ChatMessageModel>[];
+    final List<_QueuedInput> taken = List<_QueuedInput>.of(run.queue);
+    run.queue.clear();
+    _markDelivered(
+      run.sessionId,
+      <String>{for (final _QueuedInput input in taken) input.entryId},
+    );
+    return <ai.ChatMessageModel>[
+      for (final _QueuedInput input in taken) input.message,
+    ];
+  }
+
+  /// 把已经交给模型的排队气泡转成普通用户消息。
+  void _markDelivered(String sessionId, Set<String> entryIds) {
+    if (entryIds.isEmpty) return;
+    final int index = _sessions.indexWhere((ChatSession s) => s.id == sessionId);
+    if (index < 0) return;
+
+    final ChatSession session = _sessions[index];
+    bool changed = false;
+    final List<ChatMessage> updated = <ChatMessage>[];
+    for (final ChatMessage message in session.messages) {
+      if (message.queued && entryIds.contains(message.id)) {
+        updated.add(message.copyWith(queued: false));
+        changed = true;
+      } else {
+        updated.add(message);
+      }
+    }
+    if (!changed) return;
+
+    _sessions = List<ChatSession>.of(_sessions)
+      ..[index] = session.copyWith(messages: updated);
+    notifyListeners();
   }
 
   /// 重发：撤回这条消息之后的历史，让模型重新回答（存储设计 §8）。
@@ -370,18 +501,7 @@ class SessionStore extends ChangeNotifier {
         id: Ulid.generate(),
         type: EntryType.message,
         role: EntryRole.user,
-        payload: <String, Object?>{
-          'text': text,
-          if (attachments.isNotEmpty)
-            'attachments': <Map<String, Object?>>[
-              for (final PendingAttachment a in attachments)
-                <String, Object?>{
-                  'name': a.name,
-                  'mimeType': a.mimeType,
-                  'base64': base64Encode(a.bytes),
-                },
-            ],
-        },
+        payload: _userEntryPayload(text, attachments),
       ),
       preview: text,
     );
@@ -448,43 +568,14 @@ class SessionStore extends ChangeNotifier {
       if (entry.type != EntryType.message) continue;
       if (!entry.isUsableInContext) continue;
 
-      final String text = entry.payload['text'] as String? ?? '';
-      final List<ai.ContentPart> parts = <ai.ContentPart>[ai.TextPart(text)];
-      final Object? rawAttachments = entry.payload['attachments'];
-      if (rawAttachments is List) {
-        for (final Object? raw in rawAttachments) {
-          if (raw is! Map<String, Object?>) continue;
-          final String? b64 = raw['base64'] as String?;
-          final String? mime = raw['mimeType'] as String?;
-          final String name = raw['name'] as String? ?? 'attachment';
-          if (b64 == null || mime == null) continue;
-          if (mime.startsWith('image/')) {
-            parts.add(ai.ImagePart(base64Data: b64, mimeType: mime));
-          } else {
-            // 文本/代码附件必须作为文本进入模型上下文；将其伪装成
-            // ImagePart 会让 provider 请求体违反图片输入协议。
-            try {
-              final String content = utf8.decode(base64Decode(b64));
-              parts.add(
-                ai.TextPart('\n\n附件 `$name`（$mime）：\n```\n$content\n```'),
-              );
-            } on FormatException {
-              // 二进制附件暂不上传给模型，保留文件名让模型知道其存在。
-              parts.add(ai.TextPart('\n\n附件 `$name`（$mime，二进制内容未展开）。'));
-            }
-          }
-        }
-      }
       switch (entry.role) {
         case EntryRole.user:
-          if (text.isNotEmpty || parts.length > 1) {
-            history.add(
-              ai.ChatMessageModel(role: ai.MessageRole.user, parts: parts),
-            );
-          }
+          final ai.ChatMessageModel? message = _userMessageOf(entry.payload);
+          if (message != null) history.add(message);
         case EntryRole.assistant:
           // thinking 不回传：跨模型时别人的思考块会被拒（§6-15），而重放
           // 自己的思考也没有收益。正文为空的轮次直接跳过。
+          final String text = entry.payload['text'] as String? ?? '';
           if (text.isEmpty) continue;
           history.add(
             ai.ChatMessageModel(
@@ -526,14 +617,26 @@ class SessionStore extends ChangeNotifier {
       isStreaming: true,
     );
 
+    // 别处可能留着上一段的流式气泡（插话会把一轮切成两条气泡），它们不再
+    // 是"正在生成的这条"：光标只跟随本次草稿。
+    final List<ChatMessage> ordered = <ChatMessage>[
+      for (final ChatMessage m in session.messages)
+        if (m.id != draft.bubbleId)
+          m.isStreaming ? m.copyWith(isStreaming: false) : m,
+    ];
+    // 草稿插在排队消息前面：用户是在这一轮生成中途打的字，气泡该待在自己
+    // 那句话上面，而不是被下一帧的草稿顶到下面去。
+    int at = ordered.length;
+    for (int i = 0; i < ordered.length; i++) {
+      if (ordered[i].queued) {
+        at = i;
+        break;
+      }
+    }
+    ordered.insert(at, bubble);
+
     _sessions = List<ChatSession>.of(_sessions)
-      ..[index] = session.copyWith(
-        messages: <ChatMessage>[
-          for (final ChatMessage m in session.messages)
-            if (m.id != draft.bubbleId) m,
-          bubble,
-        ],
-      );
+      ..[index] = session.copyWith(messages: ordered);
     notifyListeners();
   }
 
@@ -608,13 +711,30 @@ class SessionStore extends ChangeNotifier {
   }
 }
 
-/// 进行中的一次生成。
+/// 生成中的一次运行。
 class _RunState {
   _RunState({required this.sessionId, required this.source});
 
   final String sessionId;
   final CancellationTokenSource source;
   final Completer<void> done = Completer<void>();
+
+  /// 生成期间用户打进来、还没并进上下文的话（排队式引导，协议 §10.4）。
+  ///
+  /// 队列放在会话层而不是 loop 里：谁在跑、气泡怎么显示、条目落到哪都是
+  /// 会话状态，loop 只负责在正确的时机把它取走（`takePendingInputs`）。
+  final List<_QueuedInput> queue = <_QueuedInput>[];
+}
+
+/// 一条排队中的用户输入：落库用的条目 id + 送进模型的形态。
+///
+/// 两个都要留着——`entryId` 用来把界面上那条"排队中"气泡转成普通消息，
+/// `message` 用来注入历史。
+class _QueuedInput {
+  const _QueuedInput({required this.entryId, required this.message});
+
+  final String entryId;
+  final ai.ChatMessageModel message;
 }
 
 /// 界面一次装载的条目数上限。翻页靠 `readTail(beforeSeq:)`。

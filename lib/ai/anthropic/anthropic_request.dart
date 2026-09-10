@@ -123,7 +123,19 @@ List<Map<String, Object?>> _buildMessages(ProviderRequest req) {
 
     if (markCache) breakpoints++;
 
-    out.add(<String, Object?>{'role': _roleName(msg.role), 'content': blocks});
+    final String role = _roleName(msg.role);
+    // anthropic 要求 user / assistant 交替出现。我们的历史里却可能出现
+    // 同角色相邻：tool_result 也映射成 user，而紧随其后可能就是一条真正的
+    // 用户消息（排队式引导，协议 §10.4）。合成一条即可——anthropic 接受
+    // 同一条 user 消息里先 tool_result 再 text。
+    if (out.isNotEmpty && out.last['role'] == role) {
+      final List<Map<String, Object?>> merged =
+          out.last['content']! as List<Map<String, Object?>>;
+      merged.addAll(blocks);
+      continue;
+    }
+
+    out.add(<String, Object?>{'role': role, 'content': blocks});
   }
 
   return out;

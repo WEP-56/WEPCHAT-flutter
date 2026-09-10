@@ -51,6 +51,22 @@ class AgentMessageEnd extends AgentEvent {
   final ChatMessageModel message;
 }
 
+/// 一条排队中的用户输入被并进上下文（排队式引导，协议 §10.4）。
+///
+/// 它出现的时刻是「上一批工具已经全部执行完、下一次请求还没发出」——
+/// 用户在工具执行期间打的那句话到这时才交给模型，模型据此继续或重新规划，
+/// 而不是在半途被打断（半途打断会让已经产生的副作用没有下文）。
+///
+/// 界面据此把「排队中」的气泡转成普通用户消息。
+class AgentInputInjected extends AgentEvent {
+  const AgentInputInjected({required this.message, required this.iteration});
+
+  final ChatMessageModel message;
+
+  /// 注入之后紧接着的那次 API 调用的序号。
+  final int iteration;
+}
+
 /// 一个工具即将执行。
 class AgentToolStart extends AgentEvent {
   const AgentToolStart({required this.call});

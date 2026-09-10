@@ -73,6 +73,7 @@ class ChatMessage {
     this.files = const <String>[],
     this.html,
     this.isStreaming = false,
+    this.queued = false,
     this.rawText = '',
     this.usage,
     this.elapsed,
@@ -105,6 +106,14 @@ class ChatMessage {
   /// 助手消息尚在生成中：显示光标动画并允许中断。
   final bool isStreaming;
 
+  /// 这条用户消息还排着队，等下一次安全注入点才交给模型（排队式引导，
+  /// 协议 §10.4）。
+  ///
+  /// 生成期间用户打的字不会立刻发请求——正在跑的工具不能半途打断，否则
+  /// 已经产生的副作用没有下文。注入之前气泡带着这个标记，让用户知道
+  /// "还没轮到它"；注入之后标记消失，它就是一条普通的用户消息。
+  final bool queued;
+
   /// 未经解析的原始文本，供「复制」与「编辑」用。
   ///
   /// 从 blocks 反推回 Markdown 源码是有损的（解析器丢掉了空行数量、
@@ -124,6 +133,7 @@ class ChatMessage {
     List<String>? files,
     HtmlRef? html,
     bool? isStreaming,
+    bool? queued,
     String? rawText,
     MessageUsage? usage,
     Duration? elapsed,
@@ -140,6 +150,7 @@ class ChatMessage {
       files: files ?? this.files,
       html: html ?? this.html,
       isStreaming: isStreaming ?? this.isStreaming,
+      queued: queued ?? this.queued,
       rawText: rawText ?? this.rawText,
       usage: usage ?? this.usage,
       elapsed: elapsed ?? this.elapsed,

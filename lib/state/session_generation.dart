@@ -47,6 +47,7 @@ extension _SessionGeneration on SessionStore {
         model: model,
         sessionId: sessionId,
         history: history,
+        run: run,
         runId: runId,
         token: source.token,
       );
@@ -58,6 +59,13 @@ extension _SessionGeneration on SessionStore {
       await _storage.finishRun(runId, RunOutcome.error);
       await _reload(sessionId);
     } finally {
+      // 没赶上注入点的排队输入留在队列里没有意义：条目已经落库，下一轮
+      // 读历史时自然会带上；留着只会在下一次运行里被当成新插话。
+      final int missed = run.queue.length;
+      run.queue.clear();
+      if (missed > 0 && _notice == null) {
+        _notice = '有 $missed 条消息没赶上这一轮，已经保存，下次发消息会一起带上';
+      }
       _run = null;
       run.done.complete();
       notifyListeners();
@@ -70,6 +78,7 @@ extension _SessionGeneration on SessionStore {
     required ModelSpec model,
     required String sessionId,
     required List<ai.ChatMessageModel> history,
+    required _RunState run,
     required String runId,
     required CancellationToken token,
   }) async {
@@ -102,6 +111,9 @@ extension _SessionGeneration on SessionStore {
           thinkingBudget: _thinkingBudget(model, session.thinking),
           // 尚未收到增量的失败才允许重试，避免重复输出。
           retryPolicy: const ProviderRetryPolicy(maxAttempts: 3),
+          // 排队式引导（协议 §10.4）：loop 在"即将发请求"和"本来要收场"
+          // 两个检查点上把队列取走并进历史。
+          takePendingInputs: () => takeQueuedInputs(run),
         ),
       );
 
