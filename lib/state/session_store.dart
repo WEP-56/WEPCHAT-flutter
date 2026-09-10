@@ -228,6 +228,28 @@ class SessionStore extends ChangeNotifier {
     if (_sessions.every((ChatSession s) => s.id != id)) {
       throw ArgumentError.value(id, 'id', '会话不存在');
     }
+
+    // 删除生成中的会话前先停掉运行，避免流式回调在数据库删除后继续写入。
+    final _RunState? run = _run;
+    if (run?.sessionId == id) {
+      run!.source.cancel();
+      await run.done.future;
+    }
+
+    final SessionRecord? record = await _storage.findSession(id);
+    if (record == null) {
+      throw StorageError(
+        '删除会话失败：存储中找不到会话',
+        context: <String, Object?>{'sessionId': id},
+      );
+    }
+
+    // 工作区是会话的一部分。先清理目录，清理失败时保留数据库记录，
+    // 让用户可以重试而不是得到一个指向残留目录的幽灵会话。
+    await _workspaces.deleteSessionDirectory(
+      id,
+      workspaceRoot: record.workspaceRoot,
+    );
     await _storage.deleteSession(id);
     // 「本会话内一直允许」跟着会话走。不清的话，id 万一被复用，
     // 新会话会凭空继承一份授权。

@@ -123,6 +123,19 @@ void main() {
     expect(store.active.messages, isEmpty);
   });
 
+  test('删除会话时连带删除工作区内容', () async {
+    final String sessionId = store.activeId;
+    final String workspace = store.workspacePathFor(sessionId);
+    await Directory(p.join(workspace, 'nested')).create(recursive: true);
+    await File(
+      p.join(workspace, 'nested', 'note.txt'),
+    ).writeAsString('content');
+
+    await store.deleteSession(sessionId, fallbackModel: 'Claude Sonnet 4.5');
+
+    expect(Directory(workspace).existsSync(), isFalse);
+  });
+
   test('删除当前会话后 active 落到剩下的第一个', () async {
     final String firstId = store.activeId;
     await store.createSession(model: 'GPT-5');

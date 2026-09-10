@@ -229,8 +229,7 @@ class DbWorker {
   /// 删除会话（存储设计 §9-11）。
   ///
   /// 顺序：软删 → 删 blob_refs → 硬删行（`entries` / `runs` 靠外键级联）。
-  /// 工作区目录**不在这里删**——那是用户产物，由上层确认意图后处理
-  /// （功能协议 §2.1）。
+  /// 工作区目录不在数据库 isolate 操作，由上层在确认用户意图后清理。
   void _deleteSession(String sessionId) {
     _inTransaction(() {
       final DateTime now = _now();

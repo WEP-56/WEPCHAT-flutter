@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:pdfrx/pdfrx.dart';
 
 import 'package:flutter/material.dart';
 
@@ -7,6 +8,8 @@ import '../../mock/file_bodies.dart';
 import '../../models/content.dart';
 import '../../models/workspace.dart';
 import '../../platform/workspace_file_service.dart';
+import '../../platform/document_preview_loader.dart';
+import '../../models/document_preview.dart';
 import '../../platform/open_file.dart';
 import '../../state/app_scope.dart';
 import '../../models/markdown_blocks.dart';
@@ -96,15 +99,12 @@ class FileViewerScreen extends StatelessWidget {
         ],
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 820),
-              child: SizedBox(
-                width: double.infinity,
-                child: _buildContent(context, kind),
-              ),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 820),
+            child: SizedBox(
+              width: double.infinity,
+              child: _buildContent(context, kind),
             ),
           ),
         ),
@@ -132,6 +132,16 @@ class FileViewerScreen extends StatelessWidget {
     // HTML 文件不依赖 mock 内容表：工作区里实际生成的任意 .html/.htm
     // 都应能直接交给系统默认浏览器打开。
     if (kind == FileKind.html) return _HtmlEntry(file: file);
+
+    if (<FileKind>{FileKind.pdf, FileKind.docx, FileKind.pptx}.contains(kind)) {
+      final workspace = context.sessions.workspacePathFor(
+        context.sessions.active.id,
+      );
+      return _DocumentPreview(
+        path: pathForRelative(workspace, file),
+        kind: kind,
+      );
+    }
 
     final String workspace = context.sessions.workspacePathFor(
       context.sessions.active.id,
@@ -188,6 +198,254 @@ class FileViewerScreen extends StatelessWidget {
 String pathForRelative(String root, String relative) =>
     '$root${Platform.pathSeparator}${relative.replaceAll('/', Platform.pathSeparator)}';
 
+class _DocumentPreview extends StatefulWidget {
+  const _DocumentPreview({required this.path, required this.kind});
+  final String path;
+  final FileKind kind;
+  @override
+  State<_DocumentPreview> createState() => _DocumentPreviewState();
+}
+
+class _DocumentPreviewState extends State<_DocumentPreview> {
+  late final DocumentPreviewLoader loader;
+  late final Future<DocumentPreview> future;
+  @override
+  void initState() {
+    super.initState();
+    loader = DocumentPreviewLoader();
+    final file = File(widget.path);
+    future = loader.load(file.parent.path, file.uri.pathSegments.last);
+  }
+
+  @override
+  void dispose() {
+    loader.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<DocumentPreview>(
+    future: future,
+    builder: (context, snapshot) {
+      if (snapshot.hasError)
+        return _Notice(icon: Icons.error_outline, text: '${snapshot.error}');
+      if (!snapshot.hasData)
+        return const Center(child: CircularProgressIndicator());
+      final preview = snapshot.data!;
+      if (preview is PdfPreview)
+        return PdfViewer.data(preview.bytes, sourceName: widget.path);
+      final office = preview as OfficePreview;
+      return ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: office.pages.length,
+        itemBuilder: (_, i) => _OfficePage(
+          page: office.pages[i],
+          number: i + 1,
+          presentation: office.isPresentation,
+        ),
+      );
+    },
+  );
+}
+
+class _OfficePage extends StatelessWidget {
+  const _OfficePage({
+    required this.page,
+    required this.number,
+    required this.presentation,
+  });
+  final PreviewPage page;
+  final int number;
+  final bool presentation;
+  @override
+  Widget build(BuildContext context) => Card(
+    margin: const EdgeInsets.only(bottom: 14),
+    child: Padding(
+      padding: const EdgeInsets.all(18),
+      child: page is SlidePreview
+          ? _NativeSlide(slide: page as SlidePreview, number: number)
+          : presentation
+          ? _SlideCanvas(page: page, number: number)
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(presentation ? '第 $number 页' : '文档内容'),
+                const SizedBox(height: 10),
+                ...page.parts.map(
+                  (part) => switch (part) {
+                    PreviewText(:final text) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        text,
+                        style: const TextStyle(fontSize: 15, height: 1.55),
+                      ),
+                    ),
+                    PreviewImage(:final bytes) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Image.memory(bytes),
+                    ),
+                    PreviewNotice(:final message) => Text(message),
+                  },
+                ),
+              ],
+            ),
+    ),
+  );
+}
+
+class _NativeSlide extends StatelessWidget {
+  const _NativeSlide({required this.slide, required this.number});
+  final SlidePreview slide;
+  final int number;
+  @override
+  Widget build(BuildContext context) => AspectRatio(
+    aspectRatio: slide.width / slide.height,
+    child: LayoutBuilder(
+      builder: (context, c) {
+        final sx = c.maxWidth / slide.width, sy = c.maxHeight / slide.height;
+        return ColoredBox(
+          color: Color(slide.background),
+          child: Stack(
+            children: [
+              ...slide.items.map((item) => _nativeItem(item, sx, sy)),
+              if (slide.notices.isNotEmpty)
+                Positioned(
+                  left: 8,
+                  bottom: 4,
+                  child: Text(
+                    slide.notices.join(' · '),
+                    style: const TextStyle(fontSize: 9, color: Colors.orange),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    ),
+  );
+  Widget _nativeItem(SlideItem item, double sx, double sy) {
+    final b = item.box;
+    final position = Positioned(
+      left: b.x * sx,
+      top: b.y * sy,
+      width: b.width * sx,
+      height: b.height * sy,
+      child: _content(item),
+    );
+    return item.box.rotation == 0
+        ? position
+        : Transform.rotate(
+            angle: item.box.rotation * 3.14159265359 / 180,
+            child: position,
+          );
+  }
+
+  Widget _content(SlideItem item) {
+    if (item is SlidePicture) return Image.memory(item.bytes, fit: BoxFit.fill);
+    if (item is SlideShape)
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          color: item.fill == null ? null : Color(item.fill!),
+          border: item.line == null
+              ? null
+              : Border.all(color: Color(item.line!)),
+          borderRadius: item.geometry == SlideGeometry.rounded
+              ? BorderRadius.circular(8)
+              : null,
+        ),
+      );
+    final text = item as SlideText;
+    return Padding(
+      padding: const EdgeInsets.all(4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: text.paragraphs.map((p) {
+          final spans = <TextSpan>[];
+          if (p.bullet != null) spans.add(TextSpan(text: '${p.bullet} '));
+          spans.addAll(
+            p.runs.map(
+              (r) => TextSpan(
+                text: r.text,
+                style: TextStyle(
+                  color: Color(r.color),
+                  fontSize: r.size,
+                  fontWeight: r.bold ? FontWeight.bold : null,
+                  fontStyle: r.italic ? FontStyle.italic : null,
+                  fontFamily: r.eastAsianFont ?? r.font,
+                ),
+              ),
+            ),
+          );
+          return RichText(text: TextSpan(children: spans));
+        }).toList(),
+      ),
+    );
+  }
+}
+
+class _SlideCanvas extends StatelessWidget {
+  const _SlideCanvas({required this.page, required this.number});
+  final PreviewPage page;
+  final int number;
+  @override
+  Widget build(BuildContext context) {
+    final image = page.parts.whereType<PreviewImage>().firstOrNull;
+    final texts = page.parts.whereType<PreviewText>();
+    return AspectRatio(
+      aspectRatio: 16 / 9,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (image != null) Image.memory(image.bytes, fit: BoxFit.cover),
+          Padding(
+            padding: const EdgeInsets.all(24),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: .88),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '第 $number 页',
+                          style: const TextStyle(
+                            color: Colors.black54,
+                            fontSize: 11,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        ...texts.map(
+                          (text) => Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Text(
+                              text.text,
+                              style: const TextStyle(
+                                color: Colors.black87,
+                                fontSize: 18,
+                                height: 1.35,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _RealTextPreview extends StatelessWidget {
   const _RealTextPreview({required this.path, required this.kind});
 
@@ -212,7 +470,10 @@ class _RealTextPreview extends StatelessWidget {
         if (kind == FileKind.md) {
           return BlocksView(blocks: parseMarkdownBlocks(text), gap: 12);
         }
-        return CodeBlockView(block: CodeBlock(kind.name, text));
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: CodeBlockView(block: CodeBlock(kind.name, text)),
+        );
       },
     );
   }

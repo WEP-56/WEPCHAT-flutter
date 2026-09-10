@@ -151,8 +151,8 @@ class CompressSessionRequest extends DbRequest {
   final int tokenEst;
 }
 
-/// 删除会话（存储设计 §9-11）。工作区目录的清理不在存储层做
-/// ——那是用户产物，要先确认用户意图。
+/// 删除会话记录（存储设计 §9-11）。工作区目录的清理不在存储层做，
+/// 由上层在确认用户意图后处理。
 class DeleteSessionRequest extends DbRequest {
   const DeleteSessionRequest(super.id, this.sessionId);
 

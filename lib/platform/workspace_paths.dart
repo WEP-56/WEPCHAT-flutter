@@ -5,6 +5,8 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import '../core/errors.dart';
+
 /// 工作区根目录。
 ///
 /// 每个会话在根下有一个自己的目录，目录名是 `session_id`——不是标题：
@@ -64,5 +66,62 @@ class WorkspaceRoots {
       // 交给后续的文件工具报错。
     }
     return path;
+  }
+
+  /// 删除一个会话绑定的工作区目录及其全部内容。
+  ///
+  /// [workspaceRoot] 用于删除旧会话记录中的根目录：用户修改工作区根目录
+  /// 后，历史会话仍然绑定原来的位置。目录不存在视为已经清理；其他文件系统
+  /// 错误继续向上层传播，避免会话已删而工作区残留却无人知晓。
+  Future<void> deleteSessionDirectory(
+    String sessionId, {
+    String? workspaceRoot,
+  }) async {
+    final String base = p.normalize(p.absolute(workspaceRoot ?? root));
+    if (sessionId.isEmpty ||
+        sessionId.contains('/') ||
+        sessionId.contains(r'\') ||
+        sessionId == '.' ||
+        sessionId == '..') {
+      throw ValidationError(
+        '会话工作区路径无效',
+        context: <String, Object?>{'sessionId': sessionId},
+      );
+    }
+
+    final String target = p.normalize(p.join(base, sessionId));
+    if (!p.isWithin(base, target)) {
+      throw ValidationError(
+        '会话工作区路径越出了工作区根目录',
+        context: <String, Object?>{'sessionId': sessionId},
+      );
+    }
+
+    final FileSystemEntityType type = FileSystemEntity.typeSync(
+      target,
+      followLinks: false,
+    );
+    if (type == FileSystemEntityType.notFound) return;
+
+    try {
+      if (type == FileSystemEntityType.link) {
+        await Link(target).delete();
+      } else if (type == FileSystemEntityType.directory) {
+        await Directory(target).delete(recursive: true);
+      } else {
+        throw StorageError(
+          '删除会话工作区失败：目标不是目录',
+          context: <String, Object?>{'sessionId': sessionId},
+        );
+      }
+    } on FileSystemException catch (error) {
+      throw StorageError(
+        '删除会话工作区失败',
+        context: <String, Object?>{
+          'sessionId': sessionId,
+          'osError': error.osError?.errorCode,
+        },
+      );
+    }
   }
 }

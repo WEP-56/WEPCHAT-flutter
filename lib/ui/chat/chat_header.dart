@@ -4,11 +4,13 @@ import 'package:flutter/material.dart';
 
 import '../../ai/model_catalog.dart';
 import '../../ai/provider_config.dart';
+import '../../core/errors.dart';
 import '../../models/chat.dart';
 import '../../state/app_scope.dart';
 import '../../state/app_settings.dart';
 import '../../theme/palette.dart';
 import '../widgets/controls.dart';
+import '../widgets/toast.dart';
 
 /// 聊天区顶栏：会话标题、模型选择、会话操作、工作区开关。
 ///
@@ -287,7 +289,7 @@ class _SessionMenu extends StatelessWidget {
       builder: (BuildContext ctx) => AlertDialog(
         title: const Text('删除会话', style: TextStyle(fontSize: 15)),
         content: Text(
-          '将删除「${session.title}」的对话记录。工作区文件不受影响。',
+          '将删除「${session.title}」的对话记录，同时删除该会话工作区中的所有内容。此操作不可恢复。',
           style: const TextStyle(fontSize: 13),
         ),
         actions: <Widget>[
@@ -303,10 +305,14 @@ class _SessionMenu extends StatelessWidget {
       ),
     );
     if (confirmed != true || !context.mounted) return;
-    await context.sessions.deleteSession(
-      session.id,
-      fallbackModel: context.settings.resolvedDefaultModelKey,
-    );
+    try {
+      await context.sessions.deleteSession(
+        session.id,
+        fallbackModel: context.settings.resolvedDefaultModelKey,
+      );
+    } on WepError catch (error) {
+      if (context.mounted) showAppToast(context, error.message);
+    }
   }
 }
 

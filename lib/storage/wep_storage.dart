@@ -79,7 +79,7 @@ class WepStorage {
     );
   }
 
-  /// 删除会话。**不删工作区目录**——那是用户产物，由上层确认意图后处理。
+  /// 删除会话记录。工作区目录由 [SessionStore] 在确认用户意图后清理。
   Future<void> deleteSession(String sessionId) {
     return _isolate.send<Object?>(
       (int id) => DeleteSessionRequest(id, sessionId),

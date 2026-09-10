@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
+import 'package:wepchat/core/errors.dart';
 import 'package:wepchat/platform/workspace_paths.dart';
 
 void main() {
@@ -97,6 +98,32 @@ void main() {
       final String path = roots.ensureSession('s4');
 
       expect(Directory(path).existsSync(), isFalse);
+    });
+
+    test('删除会话工作区及其内容', () async {
+      final WorkspaceRoots roots = WorkspaceRoots(root.path);
+      final String path = roots.ensureSession('s-delete');
+      await Directory(p.join(path, 'nested')).create(recursive: true);
+      await File(p.join(path, 'nested', 'note.txt')).writeAsString('content');
+
+      await roots.deleteSessionDirectory('s-delete');
+
+      expect(Directory(path).existsSync(), isFalse);
+    });
+
+    test('删除不存在的会话工作区是幂等的', () async {
+      final WorkspaceRoots roots = WorkspaceRoots(root.path);
+
+      await expectLater(roots.deleteSessionDirectory('missing'), completes);
+    });
+
+    test('拒绝不安全的会话 id', () async {
+      final WorkspaceRoots roots = WorkspaceRoots(root.path);
+
+      await expectLater(
+        roots.deleteSessionDirectory('../outside'),
+        throwsA(isA<ValidationError>()),
+      );
     });
   });
 }

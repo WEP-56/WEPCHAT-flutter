@@ -17,6 +17,8 @@ enum FileKind {
   html,
   json,
   pdf,
+  docx,
+  pptx,
   txt,
   other,
 }

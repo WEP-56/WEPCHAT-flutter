@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/app_nav.dart';
+import '../../core/errors.dart';
 import '../../mock/mock_sessions.dart';
 import '../../models/chat.dart';
 import '../../state/app_scope.dart';
@@ -8,6 +9,7 @@ import '../../state/session_store.dart';
 import '../../theme/palette.dart';
 import '../widgets/controls.dart';
 import '../widgets/context_menu_region.dart' as context_menu;
+import '../widgets/toast.dart';
 
 /// 左侧会话列表：搜索、按时间分组、底部记忆与设置入口。
 class SessionListPanel extends StatefulWidget {
@@ -284,7 +286,7 @@ class _SessionListPanelState extends State<SessionListPanel> {
       context: context,
       builder: (BuildContext dialogContext) => AlertDialog(
         title: const Text('删除会话？'),
-        content: Text('“${session.title}”及其聊天记录将被删除。'),
+        content: Text('“${session.title}”及其聊天记录将被删除，同时删除该会话工作区中的所有内容。此操作不可恢复。'),
         actions: <Widget>[
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
@@ -298,10 +300,14 @@ class _SessionListPanelState extends State<SessionListPanel> {
       ),
     );
     if (confirmed != true || !mounted) return;
-    await store.deleteSession(
-      session.id,
-      fallbackModel: this.context.settings.resolvedDefaultModelKey,
-    );
+    try {
+      await store.deleteSession(
+        session.id,
+        fallbackModel: this.context.settings.resolvedDefaultModelKey,
+      );
+    } on WepError catch (error) {
+      if (mounted) showAppToast(context, error.message);
+    }
   }
 
   Widget _buildFooter(BuildContext context) {

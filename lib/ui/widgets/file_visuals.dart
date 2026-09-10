@@ -22,6 +22,8 @@ IconData fileKindIcon(FileKind kind) {
     FileKind.html => Icons.language,
     FileKind.png || FileKind.jpg => Icons.image_outlined,
     FileKind.pdf => Icons.picture_as_pdf_outlined,
+    FileKind.docx => Icons.description_outlined,
+    FileKind.pptx => Icons.slideshow_outlined,
     FileKind.other => Icons.insert_drive_file_outlined,
   };
 }
