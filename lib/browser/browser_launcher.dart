@@ -25,6 +25,13 @@ Future<void> openWebUrl(BuildContext context, String value) async {
   await launchUrl(uri, mode: LaunchMode.externalApplication);
 }
 
+/// 在系统浏览器里打开 OAuth 授权页。
+///
+/// 必须用外部用户代理，不能用应用内 WebView：规范要求由系统浏览器承接受权，
+/// 多数身份提供商也会直接拒绝内嵌 WebView 发起的授权请求。
+Future<bool> openAuthorizationUrl(Uri uri) =>
+    launchUrl(uri, mode: LaunchMode.externalApplication);
+
 Future<bool> openExternalScheme(String value) async {
   if (!Platform.isAndroid) {
     final Uri? uri = Uri.tryParse(value);

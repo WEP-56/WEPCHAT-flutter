@@ -1,11 +1,19 @@
 import '../core/cancellation_token.dart';
 import '../core/errors.dart';
 import 'mcp_config.dart';
+import 'mcp_oauth.dart';
 
 typedef McpArgumentValidator =
     Future<String?> Function(Map<String, Object?> arguments);
+
+/// 建立连接所需的宿主上下文。
+///
+/// OAuth 令牌存储必须显式传入：SDK 在每次请求前同步读取令牌，连接层拿不到
+/// 会话级依赖，只能由宿主注入。
+typedef McpConnectionContext = ({String? workspaceRoot, McpAuthStore authStore});
+
 typedef McpConnectionFactory =
-    McpConnection Function(McpServerConfig server, String? workspaceRoot);
+    McpConnection Function(McpServerConfig server, McpConnectionContext context);
 
 /// App-owned metadata; SDK types never enter the Agent/tool contract.
 final class McpToolInfo {

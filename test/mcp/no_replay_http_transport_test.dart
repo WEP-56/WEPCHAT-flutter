@@ -7,6 +7,8 @@ import 'package:wepchat/mcp/mcp_config.dart';
 import 'package:wepchat/mcp/mcp_connection.dart';
 import 'package:wepchat/platform/mcp_transports.dart';
 
+import 'mcp_test_support.dart';
+
 /// Local protocol integration only. Run explicitly; no external server or key.
 void main() {
   test('失效的 HTTP 会话不会触发 SDK 自动重发工具调用', () async {
@@ -78,7 +80,7 @@ void main() {
         ),
         timeout: const Duration(seconds: 5),
       ),
-      null,
+      mcpContext(),
     );
     try {
       await connection.connect(CancellationToken.none);

@@ -23,6 +23,90 @@ enum McpTransportKind {
   final String label;
 }
 
+/// 远端 MCP 的认证方式。
+///
+/// OAuth 登录依赖 SDK 的授权码流程，只有 Streamable HTTP 传输暴露该入口；
+/// 旧式 SSE 传输只支持固定请求头。
+enum McpRemoteAuth {
+  headers('固定请求头'),
+  oauth('OAuth 登录');
+
+  const McpRemoteAuth(this.label);
+  final String label;
+}
+
+/// OAuth 客户端信息。
+///
+/// [clientId] 留空时交给 SDK 按协议顺序尝试 Client ID Metadata Document 和
+/// 动态客户端注册（RFC 7591）；服务器要求预注册客户端时再填写。
+final class McpOAuthClient {
+  McpOAuthClient({
+    this.clientId = '',
+    this.clientSecret,
+    Iterable<String> scopes = const <String>[],
+    this.callbackPort,
+  }) : scopes = List<String>.unmodifiable(scopes) {
+    if (clientId.contains(_oauthUnsafe)) {
+      throw const FormatException('OAuth client_id 不能包含空白字符');
+    }
+    final String? secret = clientSecret;
+    if (secret != null && (secret.isEmpty || secret.contains(_oauthUnsafe))) {
+      throw const FormatException('OAuth client_secret 必须是非空且不含空白字符的字符串');
+    }
+    if (scopes.any(
+      (String scope) => scope.isEmpty || scope.contains(_oauthUnsafe),
+    )) {
+      throw const FormatException('OAuth scope 必须是不含空白的单个标识符');
+    }
+    final int? port = callbackPort;
+    if (port != null && (port < 1024 || port > 65535)) {
+      throw const FormatException('OAuth 回调端口必须在 1024–65535 之间');
+    }
+  }
+
+  factory McpOAuthClient.fromJson(Object? raw) {
+    if (raw == null) return McpOAuthClient();
+    if (raw is! Map<String, Object?>) {
+      throw const FormatException('OAuth 客户端配置必须是 JSON 对象');
+    }
+    final Object? port = raw['callbackPort'];
+    if (port != null && port is! int) {
+      throw const FormatException('OAuth 回调端口必须是整数');
+    }
+    return McpOAuthClient(
+      clientId: switch (raw['clientId']) {
+        null => '',
+        final String value => value,
+        _ => throw const FormatException('OAuth client_id 必须是字符串'),
+      },
+      clientSecret: switch (raw['clientSecret']) {
+        null => null,
+        final String value => value,
+        _ => throw const FormatException('OAuth client_secret 必须是字符串'),
+      },
+      scopes: _stringList(raw['scopes'], 'scopes'),
+      callbackPort: port as int?,
+    );
+  }
+
+  /// 空字符串表示未预注册，交给 SDK 自动注册。
+  final String clientId;
+  final String? clientSecret;
+  final List<String> scopes;
+
+  /// 回环回调端口。留空使用系统分配的临时端口。
+  final int? callbackPort;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'clientId': clientId,
+    if (clientSecret != null) 'clientSecret': clientSecret,
+    'scopes': scopes,
+    if (callbackPort != null) 'callbackPort': callbackPort,
+  };
+}
+
+final RegExp _oauthUnsafe = RegExp(r'[\s\x00]');
+
 /// Transport-specific configuration; credentials remain in App-private settings.
 sealed class McpEndpoint {
   const McpEndpoint();
@@ -38,6 +122,10 @@ sealed class McpEndpoint {
             : McpTransportKind.streamableHttp,
         url: Uri.parse(_string(json, 'url')),
         headers: _stringMap(json['headers'], 'headers'),
+        auth: _remoteAuth(json),
+        oauth: json['oauth'] == null
+            ? null
+            : McpOAuthClient.fromJson(json['oauth']),
       ),
       'stdio' => McpStdioEndpoint(
         command: _string(json, 'command'),
@@ -54,11 +142,22 @@ sealed class McpEndpoint {
   }
 }
 
+McpRemoteAuth _remoteAuth(Map<String, Object?> json) {
+  final String name = _string(json, 'auth', defaultValue: 'headers');
+  return switch (name) {
+    'headers' => McpRemoteAuth.headers,
+    'oauth' => McpRemoteAuth.oauth,
+    _ => throw FormatException('不支持的 MCP 认证方式：$name'),
+  };
+}
+
 final class McpRemoteEndpoint extends McpEndpoint {
   McpRemoteEndpoint({
     required this.kind,
     required this.url,
     Map<String, String> headers = const <String, String>{},
+    this.auth = McpRemoteAuth.headers,
+    this.oauth,
   }) : headers = Map<String, String>.unmodifiable(headers) {
     if (kind == McpTransportKind.stdio) {
       throw const FormatException('网络 MCP 不能使用 stdio');
@@ -78,18 +177,38 @@ final class McpRemoteEndpoint extends McpEndpoint {
         throw const FormatException('请求头名称无效、重复，或值含有换行');
       }
     }
+    if (auth != McpRemoteAuth.oauth) return;
+    if (kind != McpTransportKind.streamableHttp) {
+      throw const FormatException('只有 Streamable HTTP 支持 OAuth 登录；SSE 请使用固定请求头');
+    }
+    if (oauth == null) {
+      throw const FormatException('OAuth 登录缺少客户端配置');
+    }
+    if (names.contains('authorization')) {
+      throw const FormatException('OAuth 登录会自行设置 Authorization 头，请从请求头中移除');
+    }
   }
 
   @override
   final McpTransportKind kind;
   final Uri url;
   final Map<String, String> headers;
+  final McpRemoteAuth auth;
+
+  /// 仅在 [auth] 为 OAuth 时有意义。
+  final McpOAuthClient? oauth;
+
+  /// OAuth 客户端配置；非 OAuth 端点返回 null，调用方无需再判认证方式。
+  McpOAuthClient? get oauthClient =>
+      auth == McpRemoteAuth.oauth ? oauth : null;
 
   @override
   Map<String, Object?> toJson() => <String, Object?>{
     'transport': kind.name,
     'url': url.toString(),
+    'auth': auth.name,
     'headers': headers,
+    if (oauthClient != null) 'oauth': oauthClient!.toJson(),
   };
 }
 

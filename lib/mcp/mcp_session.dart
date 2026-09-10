@@ -2,6 +2,7 @@ import '../core/cancellation_token.dart';
 import '../tools/tool_permission.dart';
 import 'mcp_config.dart';
 import 'mcp_connection.dart';
+import 'mcp_oauth.dart';
 
 final class McpToolBinding {
   const McpToolBinding({
@@ -25,16 +26,19 @@ final class McpSession {
     required McpConnectionFactory factory,
     required CancellationToken parentToken,
     required this.supportsStdio,
+    required McpAuthStore authStore,
     this.workspaceRoot,
     this.onDiscovered,
     this.onClosed,
   }) : _servers = List<McpServerConfig>.unmodifiable(servers),
-       _factory = factory {
+       _factory = factory,
+       _context = (workspaceRoot: workspaceRoot, authStore: authStore) {
     _unlinkParent = parentToken.onCancel(_source.cancel);
   }
 
   final List<McpServerConfig> _servers;
   final McpConnectionFactory _factory;
+  final McpConnectionContext _context;
   final bool supportsStdio;
   final String? workspaceRoot;
   final void Function(McpServerConfig, List<McpToolInfo>)? onDiscovered;
@@ -56,7 +60,7 @@ final class McpSession {
       if (!supportsStdio && server.endpoint.kind == McpTransportKind.stdio) {
         throw McpFailure('MCP「${server.name}」使用 stdio，仅 Windows 支持；请禁用该服务器');
       }
-      final McpConnection connection = _factory(server, workspaceRoot);
+      final McpConnection connection = _factory(server, _context);
       _connections.add(connection);
       final List<McpToolInfo> discovered = await connection.connect(
         _source.token,

@@ -67,3 +67,4 @@ keystore_base64.txt
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+.workbuddy

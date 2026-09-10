@@ -31,12 +31,17 @@ class _McpServerDialogState extends State<_McpServerDialog> {
   final TextEditingController _name = TextEditingController();
   final TextEditingController _url = TextEditingController();
   final TextEditingController _headers = TextEditingController(text: '{}');
+  final TextEditingController _clientId = TextEditingController();
+  final TextEditingController _clientSecret = TextEditingController();
+  final TextEditingController _scopes = TextEditingController();
+  final TextEditingController _callbackPort = TextEditingController();
   final TextEditingController _command = TextEditingController(text: 'npx');
   final TextEditingController _arguments = TextEditingController(text: '[]');
   final TextEditingController _environment = TextEditingController(text: '{}');
   final TextEditingController _directory = TextEditingController();
   final TextEditingController _timeout = TextEditingController(text: '60');
   McpTransportKind _kind = McpTransportKind.streamableHttp;
+  McpRemoteAuth _auth = McpRemoteAuth.headers;
   String? _error;
   bool _hideSecrets = true;
 
@@ -49,9 +54,21 @@ class _McpServerDialogState extends State<_McpServerDialog> {
     _kind = server.endpoint.kind;
     _timeout.text = '${server.timeout.inSeconds}';
     switch (server.endpoint) {
-      case McpRemoteEndpoint(:final url, :final headers):
+      case McpRemoteEndpoint(
+        :final url,
+        :final headers,
+        :final auth,
+        :final oauth,
+      ):
         _url.text = url.toString();
         _headers.text = jsonEncode(headers);
+        _auth = auth;
+        if (oauth != null) {
+          _clientId.text = oauth.clientId;
+          _clientSecret.text = oauth.clientSecret ?? '';
+          _scopes.text = oauth.scopes.join(' ');
+          _callbackPort.text = oauth.callbackPort?.toString() ?? '';
+        }
       case McpStdioEndpoint(
         :final command,
         :final arguments,
@@ -71,6 +88,10 @@ class _McpServerDialogState extends State<_McpServerDialog> {
       _name,
       _url,
       _headers,
+      _clientId,
+      _clientSecret,
+      _scopes,
+      _callbackPort,
       _command,
       _arguments,
       _environment,
@@ -119,7 +140,14 @@ class _McpServerDialogState extends State<_McpServerDialog> {
                       ),
                 ],
                 onChanged: (McpTransportKind? kind) {
-                  if (kind != null) setState(() => _kind = kind);
+                  if (kind == null) return;
+                  setState(() {
+                    _kind = kind;
+                    // SSE 传输没有 OAuth 入口，切过去就退回固定请求头。
+                    if (kind == McpTransportKind.sse) {
+                      _auth = McpRemoteAuth.headers;
+                    }
+                  });
                 },
               ),
               const SizedBox(height: 16),
@@ -176,13 +204,113 @@ class _McpServerDialogState extends State<_McpServerDialog> {
       helper: '填写完整接口地址。SSE 需要服务器提供旧版 HTTP + SSE 接口。',
       mono: true,
     ),
+    if (!supportsOAuth)
+      LabeledField(
+        label: '请求头（JSON 对象）',
+        controller: _headers,
+        hint: '{"Authorization":"Bearer …"}',
+        helper: '值必须是字符串；无请求头时填写 {}。旧式 SSE 只支持固定请求头，'
+            '服务器要求 OAuth 登录时需要改用 Streamable HTTP。',
+        obscure: _hideSecrets,
+        mono: true,
+      )
+    else ...<Widget>[
+      DropdownButtonFormField<McpRemoteAuth>(
+        initialValue: _auth,
+        decoration: const InputDecoration(labelText: '认证方式', isDense: true),
+        isExpanded: true,
+        items: <DropdownMenuItem<McpRemoteAuth>>[
+          for (final McpRemoteAuth auth in McpRemoteAuth.values)
+            DropdownMenuItem<McpRemoteAuth>(
+              value: auth,
+              child: Text(auth.label, style: const TextStyle(fontSize: 12)),
+            ),
+        ],
+        onChanged: (McpRemoteAuth? auth) {
+          if (auth != null) setState(() => _auth = auth);
+        },
+      ),
+      const SizedBox(height: 14),
+      if (_auth == McpRemoteAuth.headers)
+        LabeledField(
+          label: '请求头（JSON 对象）',
+          controller: _headers,
+          hint: '{"Authorization":"Bearer …"}',
+          helper: '值必须是字符串；无请求头时填写 {}。需要交互登录的服务器请改选「OAuth 登录」。',
+          obscure: _hideSecrets,
+          mono: true,
+        )
+      else
+        ..._oauthFields(),
+    ],
+  ];
+
+  /// OAuth 只在 Streamable HTTP 上可用；SSE 连规范入口都没有。
+  bool get supportsOAuth => _kind == McpTransportKind.streamableHttp;
+
+  List<Widget> _oauthFields() => <Widget>[
     LabeledField(
-      label: '请求头（JSON 对象）',
-      controller: _headers,
-      hint: '{"Authorization":"Bearer …"}',
-      helper: '值必须是字符串；无请求头时填写 {}。当前支持固定凭据，不支持 OAuth 登录流程。',
+      label: '客户端 ID',
+      controller: _clientId,
+      hint: '留空自动注册',
+      helper: '留空时由服务器分配。提示「不支持自动注册客户端」时必须填写——'
+          'GitHub、Atlassian 这类需要在提供方后台自建 OAuth 应用。',
+      mono: true,
+    ),
+    LabeledField(
+      label: '客户端密钥',
+      controller: _clientSecret,
+      helper: '只有机密客户端需要；GitHub 这类应用必须填。公开客户端留空。',
       obscure: _hideSecrets,
       mono: true,
+    ),
+    LabeledField(
+      label: '权限范围（可选）',
+      controller: _scopes,
+      hint: 'tools:read tools:write',
+      helper: '空格或逗号分隔。留空时使用服务器在 401 响应里要求的范围。',
+      mono: true,
+    ),
+    LabeledField(
+      label: '回调端口',
+      controller: _callbackPort,
+      numeric: true,
+      helper: '留空使用系统分配的临时端口。提供方要求回调地址精确匹配时'
+          '（GitHub 就是这样）必须填 1024–65535 的固定端口。',
+    ),
+    ValueListenableBuilder<TextEditingValue>(
+      valueListenable: _callbackPort,
+      builder: (BuildContext context, TextEditingValue value, Widget? child) {
+        final int? port = int.tryParse(value.text.trim());
+        return Text(
+          port == null
+              ? '回调地址：http://127.0.0.1:<临时端口>/callback（端口每次授权都不同，'
+                    '授权弹窗里会显示实际地址）'
+              : '回调地址：http://127.0.0.1:$port/callback —— 需要预注册客户端时，'
+                    '把它原样登记为提供方后台的授权回调地址',
+          style: port == null
+              ? TextStyle(
+                  fontSize: 11.5,
+                  height: 1.5,
+                  color: context.palette.text3,
+                )
+              : TextStyle(
+                  fontSize: 11.5,
+                  height: 1.5,
+                  color: context.palette.text2,
+                ),
+        );
+      },
+    ),
+    const SizedBox(height: 10),
+    Text(
+      'OAuth 登录在「设置 → 高级功能」的服务器卡片上发起；令牌保存在本机，'
+      '可在同一位置退出登录。',
+      style: TextStyle(
+        fontSize: 11.5,
+        height: 1.5,
+        color: context.palette.text3,
+      ),
     ),
   ];
 
@@ -238,6 +366,12 @@ class _McpServerDialogState extends State<_McpServerDialog> {
       }
       final int? seconds = int.tryParse(_timeout.text.trim());
       if (seconds == null) throw const FormatException('超时必须是 1–600 的整数秒');
+      final String portText = _callbackPort.text.trim();
+      final int? callbackPort = portText.isEmpty ? null : int.tryParse(portText);
+      if (portText.isNotEmpty && callbackPort == null) {
+        throw const FormatException('回调端口必须是 1024–65535 的整数');
+      }
+      final bool usesOAuth = supportsOAuth && _auth == McpRemoteAuth.oauth;
       final Map<String, Object?> json = <String, Object?>{
         'id': widget.existing?.id ?? Ulid.generate(),
         'name': _name.text.trim(),
@@ -253,7 +387,19 @@ class _McpServerDialogState extends State<_McpServerDialog> {
             'workingDirectory': _directory.text.trim(),
         } else ...<String, Object?>{
           'url': _url.text.trim(),
-          'headers': _jsonField(_headers, '请求头'),
+          // SSE 没有 OAuth 入口，配置里不允许出现这个组合。
+          'auth': usesOAuth ? _auth.name : McpRemoteAuth.headers.name,
+          'headers': usesOAuth
+              ? const <String, Object?>{}
+              : _jsonField(_headers, '请求头'),
+          if (usesOAuth)
+            'oauth': <String, Object?>{
+              'clientId': _clientId.text.trim(),
+              if (_clientSecret.text.trim().isNotEmpty)
+                'clientSecret': _clientSecret.text.trim(),
+              'scopes': _scopeList(),
+              'callbackPort': ?callbackPort,
+            },
         },
       };
       Navigator.of(context).pop(McpServerConfig.fromJson(json));
@@ -261,6 +407,11 @@ class _McpServerDialogState extends State<_McpServerDialog> {
       setState(() => _error = error.message);
     }
   }
+
+  List<String> _scopeList() => _scopes.text
+      .split(RegExp(r'[\s,]+'))
+      .where((String scope) => scope.isNotEmpty)
+      .toList();
 
   Object? _jsonField(TextEditingController controller, String label) {
     try {

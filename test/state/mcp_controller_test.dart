@@ -21,7 +21,7 @@ void main() {
     controller = McpController(
       settings: settings,
       supportsStdio: false,
-      factory: (McpServerConfig server, String? workspace) {
+      factory: (McpServerConfig server, McpConnectionContext context) {
         final FakeMcpConnection connection = FakeMcpConnection();
         created.add(connection);
         return connection;
@@ -84,7 +84,7 @@ void main() {
     controller.dispose();
     controller = McpController(
       settings: settings,
-      factory: (McpServerConfig server, String? root) {
+      factory: (McpServerConfig server, McpConnectionContext context) {
         final FakeMcpConnection connection = FakeMcpConnection();
         if (server.id == 'server-b') {
           connection.onConnect = (_) async =>

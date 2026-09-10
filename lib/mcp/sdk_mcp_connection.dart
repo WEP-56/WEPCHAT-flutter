@@ -10,8 +10,8 @@ import '../core/cancellation_token.dart';
 import '../core/redact.dart';
 import 'mcp_config.dart';
 import 'mcp_connection.dart';
+import 'mcp_error_text.dart';
 import 'mcp_result_text.dart';
-import 'no_replay_http_transport.dart';
 
 /// Adapts the MCP SDK at the infrastructure boundary. A disconnected call is
 /// never replayed by this adapter: the server may already have applied it.
@@ -179,25 +179,17 @@ final class SdkMcpConnection implements McpConnection {
     }
   }
 
-  String _safeError(Object error) {
-    if (error is TimeoutException) return '请求超时';
-    if (error is McpSessionExpired) return '服务器会话已失效，请在新一轮中重新连接';
-    if (error is McpFailure) return error.message;
-    if (error is sdk.UnauthorizedError) return '认证失败，请检查请求头中的凭据';
-    if (error is sdk.StreamableHttpError && error.code != null) {
-      return '服务器返回 HTTP ${error.code}';
-    }
-    if (error is sdk.SseClientError && error.code != null) {
-      return '服务器返回 HTTP ${error.code}';
-    }
-    if (error is sdk.McpError) {
-      return error.code == sdk.ErrorCode.requestTimeout.value
-          ? '请求超时'
-          : '协议错误 ${error.code}';
-    }
-    if (error is FormatException) return '服务器返回的数据格式无效';
-    return _protocolError ?? '连接中断或服务器响应无效';
-  }
+  /// OAuth 端点的 401 含义与固定请求头不同：不是"凭据填错了"，而是"该登录了"。
+  bool get _usesOAuth => switch (server.endpoint) {
+    final McpRemoteEndpoint endpoint => endpoint.oauthClient != null,
+    McpStdioEndpoint() => false,
+  };
+
+  String _safeError(Object error) => mcpErrorText(
+    error,
+    oauthEndpoint: _usesOAuth,
+    fallback: _protocolError ?? '连接中断或服务器响应无效',
+  );
 }
 
 Future<String?> _validateSchema(

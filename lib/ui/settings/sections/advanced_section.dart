@@ -1,13 +1,17 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
+import '../../../browser/browser_launcher.dart';
 import '../../../core/cancellation_token.dart';
 import '../../../mcp/mcp_config.dart';
 import '../../../mcp/mcp_connection.dart';
+import '../../../mcp/mcp_oauth_login.dart';
 import '../../../state/app_scope.dart';
 import '../../../state/app_settings.dart';
 import '../../../state/mcp_controller.dart';
+import '../../../theme/fonts.dart';
 import '../../../theme/palette.dart';
 import '../../../tools/tool_permission.dart';
 import '../../widgets/segmented_control.dart';
@@ -145,9 +149,18 @@ class _AdvancedSectionState extends State<AdvancedSection> {
     final bool supported =
         server.endpoint.kind != McpTransportKind.stdio || mcp.supportsStdio;
     final McpProbeState? probe = mcp.probe(server.id);
+    final McpEndpoint endpoint = server.endpoint;
+    final McpOAuthClient? oauth = endpoint is McpRemoteEndpoint
+        ? endpoint.oauthClient
+        : null;
+    final bool authorized = mcp.isAuthorized(server.id);
     return SettingsCard(
       title: server.name,
-      subtitle: '${server.endpoint.kind.label}${supported ? '' : ' · 当前设备不支持'}',
+      subtitle: <String>[
+        server.endpoint.kind.label,
+        if (!supported) '当前设备不支持',
+        if (oauth != null) authorized ? '已登录' : '未登录',
+      ].join(' · '),
       children: <Widget>[
         SettingsRow(
           title: '使用此服务器',
@@ -175,6 +188,13 @@ class _AdvancedSectionState extends State<AdvancedSection> {
                 settings.saveMcpServer(server.copyWith(permission: value)),
           ),
         ),
+        if (oauth != null)
+          Text(
+            authorized
+                ? 'OAuth 已登录：令牌只保存在本机，可在下方退出登录。'
+                : 'OAuth 尚未登录：登录前该服务器的工具不会加入对话。',
+            style: TextStyle(fontSize: 11.5, color: context.palette.text3),
+          ),
         Wrap(
           spacing: 8,
           runSpacing: 4,
@@ -185,6 +205,24 @@ class _AdvancedSectionState extends State<AdvancedSection> {
                   : null,
               child: Text(_tests.containsKey(server.id) ? '取消测试' : '测试连接'),
             ),
+            if (oauth != null)
+              OutlinedButton(
+                onPressed: settings.mcp.enabled && !mcp.isAuthorizing(server.id)
+                    ? () => unawaited(_authorize(server))
+                    : null,
+                child: Text(
+                  mcp.isAuthorizing(server.id)
+                      ? '授权中…'
+                      : authorized
+                      ? '重新登录'
+                      : '登录授权',
+                ),
+              ),
+            if (oauth != null && authorized)
+              TextButton(
+                onPressed: () => unawaited(mcp.signOut(server.id)),
+                child: const Text('退出登录'),
+              ),
             TextButton(
               onPressed: () => unawaited(_edit(server)),
               child: const Text('编辑'),
@@ -195,6 +233,17 @@ class _AdvancedSectionState extends State<AdvancedSection> {
             ),
           ],
         ),
+        if (mcp.authError(server.id) case final String authError)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: SelectableText(
+              authError,
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).colorScheme.error,
+              ),
+            ),
+          ),
         if (server.endpoint.kind == McpTransportKind.stdio)
           const Text(
             '测试连接和聊天会启动本地进程；npx/uvx 可能下载依赖。',
@@ -323,6 +372,102 @@ class _AdvancedSectionState extends State<AdvancedSection> {
     } finally {
       _tests.remove(server.id);
       if (mounted) setState(() {});
+    }
+  }
+
+  /// 走一次浏览器授权。成功与否由控制器记录，这里只负责把失败原因显示出来。
+  Future<void> _authorize(McpServerConfig server) async {
+    final McpController mcp = context.sessions.mcp;
+    try {
+      final bool done = await mcp.authorize(
+        server.id,
+        confirm: _confirmAuthorization,
+        openBrowser: _openAuthorizationBrowser,
+      );
+      if (!mounted || done) return;
+      final String? error = mcp.authError(server.id);
+      if (error != null) showAppToast(context, error);
+    } on McpFailure catch (error) {
+      if (mounted) showAppToast(context, error.message);
+    }
+  }
+
+  /// 授权服务器可能与 MCP 服务器不同源，跳转前让用户看到具体域名与请求范围。
+  Future<bool> _confirmAuthorization(McpAuthorizationRequest request) async {
+    final String? scope = request.scope;
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: const Text('在浏览器中登录'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text('「${request.serverName}」要求在浏览器中完成 OAuth 登录。'),
+              const SizedBox(height: 12),
+              Text(
+                '授权服务器：${request.host}',
+                style: const TextStyle(fontSize: 12),
+              ),
+              if (scope != null && scope.isNotEmpty)
+                Text('请求范围：$scope', style: const TextStyle(fontSize: 12)),
+              const SizedBox(height: 8),
+              SelectableText(
+                '回调地址：${request.redirectUri}',
+                style: AppFonts.mono(size: 11.5, color: context.palette.text2),
+              ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () => unawaited(
+                    Clipboard.setData(
+                      ClipboardData(text: request.redirectUri.toString()),
+                    ),
+                  ),
+                  icon: const Icon(Icons.copy, size: 15),
+                  label: const Text('复制回调地址'),
+                ),
+              ),
+              Text(
+                '服务器要求预注册客户端时，需要先把上面的回调地址原样登记到提供方后台。'
+                '「回调端口」留空时端口每次授权都不同，要固定地址就先在服务器配置里填一个固定端口。',
+                style: TextStyle(
+                  fontSize: 11.5,
+                  height: 1.5,
+                  color: context.palette.text3,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '只在你认识的域名上登录。授权完成后回到应用即可，令牌保存在本机。',
+                style: TextStyle(
+                  fontSize: 11.5,
+                  height: 1.5,
+                  color: context.palette.text3,
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('打开浏览器'),
+          ),
+        ],
+      ),
+    );
+    return confirmed ?? false;
+  }
+
+  Future<void> _openAuthorizationBrowser(Uri uri) async {
+    if (!await openAuthorizationUrl(uri)) {
+      throw const McpFailure('无法打开系统浏览器完成授权');
     }
   }
 }

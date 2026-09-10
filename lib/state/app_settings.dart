@@ -7,6 +7,7 @@ import '../ai/model_catalog.dart';
 import '../ai/model_compat.dart';
 import '../ai/provider_config.dart';
 import '../mock/mock_settings.dart';
+import '../mcp/mcp_auth_storage.dart';
 import '../mcp/mcp_config.dart';
 import '../models/settings.dart';
 import '../platform/settings_store.dart';
@@ -29,6 +30,7 @@ class AppSettings extends ChangeNotifier {
     required List<ModelSpec> models,
     required Map<String, ToolPermission> permissions,
     required McpSettings mcp,
+    required McpAuthStorage mcpAuth,
     required String defaultModelKey,
     required String? imageGenModelKey,
     required String? imageEditModelKey,
@@ -49,6 +51,7 @@ class AppSettings extends ChangeNotifier {
        _models = models,
        _permissions = permissions,
        _mcp = mcp,
+       _mcpAuth = mcpAuth,
        _defaultModelKey = defaultModelKey,
        _imageGenModelKey = imageGenModelKey,
        _imageEditModelKey = imageEditModelKey,
@@ -63,7 +66,10 @@ class AppSettings extends ChangeNotifier {
        _searchApiKey = searchApiKey,
        _searchBaseUrl = searchBaseUrl,
        _searchProviders = searchProviders,
-       _workspaceRoot = workspaceRoot;
+       _workspaceRoot = workspaceRoot {
+    // 令牌变化要和其它设置一样落盘并刷新界面，走同一条写盘通道。
+    _mcpAuth.onChanged = _changed;
+  }
 
   /// 从磁盘读。文件不存在时用默认值（首次启动）。
   ///
@@ -80,6 +86,9 @@ class AppSettings extends ChangeNotifier {
       models: _readModels(json['models']),
       permissions: _readPermissions(json['permissions']),
       mcp: McpSettings.fromJson(json['mcp']),
+      mcpAuth: McpAuthStorage(
+        initial: McpAuthStorage.decode(json['mcpAuth']),
+      ),
       defaultModelKey: json['defaultModelKey'] as String? ?? '',
       imageGenModelKey: json['imageGenModelKey'] as String?,
       imageEditModelKey: json['imageEditModelKey'] as String?,
@@ -138,6 +147,13 @@ class AppSettings extends ChangeNotifier {
   final Map<String, ToolPermission> _permissions;
   McpSettings _mcp;
   McpSettings get mcp => _mcp;
+
+  /// OAuth 令牌按服务器 id 存放，与 [_mcp] 刻意分开。
+  ///
+  /// 令牌每次刷新都会变。如果塞进 McpSettings，配置对象的身份也会变，
+  /// McpController 会把它当成「配置变更」而断开当前所有连接。
+  final McpAuthStorage _mcpAuth;
+  McpAuthStorage get mcpAuth => _mcpAuth;
 
   String _defaultModelKey;
 
@@ -704,6 +720,7 @@ class AppSettings extends ChangeNotifier {
 
   Map<String, Object?> toJson() => <String, Object?>{
     'mcp': _mcp.toJson(),
+    'mcpAuth': _mcpAuth.toJson(),
     'providers': <Map<String, Object?>>[
       for (final ProviderConfig p in _providers) p.toJson(),
     ],

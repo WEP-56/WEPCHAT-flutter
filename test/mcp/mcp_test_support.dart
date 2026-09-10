@@ -1,7 +1,17 @@
 import 'package:wepchat/core/cancellation_token.dart';
+import 'package:wepchat/mcp/mcp_auth_storage.dart';
 import 'package:wepchat/mcp/mcp_config.dart';
 import 'package:wepchat/mcp/mcp_connection.dart';
 import 'package:wepchat/tools/tool_permission.dart';
+
+/// 建立连接所需的宿主上下文，默认使用内存令牌存储。
+McpConnectionContext mcpContext({
+  String? workspaceRoot,
+  McpAuthStorage? authStore,
+}) => (
+  workspaceRoot: workspaceRoot,
+  authStore: authStore ?? McpAuthStorage(),
+);
 
 McpServerConfig remoteServer({
   String id = 'server-a',
