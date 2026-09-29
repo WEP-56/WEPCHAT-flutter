@@ -7,7 +7,7 @@ import '../../models/workspace.dart';
 const ChatSession kResearchSession = ChatSession(
   id: 's2',
   title: '向量数据库选型调研',
-  group: '今天',
+  group: SessionGroup.today,
   time: '11:05',
   preview: '嵌入式方案更符合 local-first 边界，已整理对比表',
   model: 'Claude Sonnet 4.5',

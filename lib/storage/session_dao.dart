@@ -13,18 +13,25 @@ class SessionDao {
 
   final Database _db;
 
-  /// 会话列表：只读元信息列，**不读 payload**（存储设计 §1 第三种读法）。
+  /// 会话列表的一页：只读元信息列，**不读 payload**（存储设计 §1 第三种读法）。
   ///
-  /// 走 `sessions_recent` 索引，不做全表扫描。
-  List<SessionSummary> listSummaries({int limit = 200}) {
+  /// 走 `sessions_recent` 索引筛掉已删除的会话。
+  ///
+  /// [limit] / [offset] 是分页边界，不是"只能看到这么多会话"。需要完整列表
+  /// 的调用方走 `WepStorage.listAllSessions()`，不要靠放大 [limit] 蒙一个数。
+  ///
+  /// 排序带 `id` 兜底：`updated_at` 只有毫秒精度，两条会话可能撞上同一个值，
+  /// 而 `LIMIT/OFFSET` 分页要求一个**全序**——只按 `updated_at` 排的话，撞值的
+  /// 那几行顺序取决于实现细节，翻页时可能重复或漏掉。
+  List<SessionSummary> listSummaries({required int limit, required int offset}) {
     final ResultSet rows = _db.select(
       '''
 SELECT id, title, updated_at, preview, model_id, context_tokens, cost_total
 FROM sessions
 WHERE deleted_at IS NULL
-ORDER BY updated_at DESC
-LIMIT ?''',
-      <Object?>[limit],
+ORDER BY updated_at DESC, id DESC
+LIMIT ? OFFSET ?''',
+      <Object?>[limit, offset],
     );
 
     return rows.map(_toSummary).toList(growable: false);

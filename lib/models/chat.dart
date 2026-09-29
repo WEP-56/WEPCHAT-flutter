@@ -189,6 +189,33 @@ class MessageUsage {
       reasoningTokens == 0;
 }
 
+/// 会话列表的时间分组。
+///
+/// 声明顺序就是列表里的显示顺序，界面直接遍历 [values] 渲染。分组标签和分组
+/// 顺序只在这一处定义：两边各存一份时，任何一边改了另一边不会报错，整组会话
+/// 就会从侧边栏静默消失（数据还在库里，用户看到的却是空列表）。
+enum SessionGroup {
+  today('今天'),
+  yesterday('昨天'),
+  pastWeek('过去 7 天'),
+  pastMonth('过去 30 天'),
+  earlier('更早');
+
+  const SessionGroup(this.label);
+
+  /// 分组标题，仅用于界面显示。
+  final String label;
+
+  /// [days] 为会话更新日期距今天的天数（本地日历天，0 表示今天）。
+  static SessionGroup fromDays(int days) {
+    if (days <= 0) return SessionGroup.today;
+    if (days == 1) return SessionGroup.yesterday;
+    if (days < 7) return SessionGroup.pastWeek;
+    if (days < 30) return SessionGroup.pastMonth;
+    return SessionGroup.earlier;
+  }
+}
+
 class ChatSession {
   const ChatSession({
     required this.id,
@@ -208,8 +235,8 @@ class ChatSession {
   /// 仅用于界面显示，默认取用户第一句话的前几个字。
   final String title;
 
-  /// 会话列表分组，例如「今天」。
-  final String group;
+  /// 会话列表分组，由 [updatedAt] 推得（见 [SessionGroup.fromDays]）。
+  final SessionGroup group;
 
   final String time;
   final String preview;

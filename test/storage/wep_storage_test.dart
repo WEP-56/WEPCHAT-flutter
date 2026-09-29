@@ -61,7 +61,7 @@ void main() {
         modelId: 'claude-opus-5',
       );
 
-      final List<SessionSummary> summaries = await storage.listSessions();
+      final List<SessionSummary> summaries = await storage.listAllSessions();
       expect(summaries.length, equals(2));
       // 第二个更新时间晚，应该排在前面
       expect(summaries[0].id, equals(s2.id));
@@ -95,8 +95,34 @@ void main() {
       final SessionRecord? found = await storage.findSession(session.id);
       expect(found, isNull);
 
-      final List<SessionSummary> summaries = await storage.listSessions();
+      final List<SessionSummary> summaries = await storage.listAllSessions();
       expect(summaries, isEmpty);
+    });
+
+    test('超过一页的会话全部读出，不被静默截断', () async {
+      // 侧边栏早先只取一页（默认上限 200）且不翻页，第 201 个会话起就从列表里
+      // 消失——库里数据完好，用户只是看到列表变短。250 次连续插入几乎必然
+      // 撞上同一毫秒的 updated_at，顺带验证分页排序确实是全序（不重不漏）。
+      const int total = 250;
+      for (int i = 0; i < total; i++) {
+        await storage.createSession(
+          title: '会话 $i',
+          workspaceRoot: '/tmp/workspace',
+          providerId: 'anthropic',
+          modelId: 'claude-opus-5',
+        );
+      }
+
+      final List<SessionSummary> all = await storage.listAllSessions();
+      expect(all.length, equals(total));
+      expect(
+        all.map((SessionSummary s) => s.id).toSet().length,
+        equals(total),
+        reason: '分页翻页时出现重复行，说明排序不是全序',
+      );
+
+      // 单页仍然有界：这是查询边界，不等于"只能看到这么多会话"。
+      expect((await storage.listSessions(limit: 200)).length, equals(200));
     });
   });
 

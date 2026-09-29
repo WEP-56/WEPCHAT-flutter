@@ -687,7 +687,8 @@ class SessionStore extends ChangeNotifier {
     WepStorage storage,
     WorkspaceRoots workspaces,
   ) async {
-    final List<SessionSummary> summaries = await storage.listSessions();
+    // 读全量：任何截断都会让老会话从侧边栏消失，而库里数据完好、无从察觉。
+    final List<SessionSummary> summaries = await storage.listAllSessions();
     final List<ChatSession> result = <ChatSession>[];
 
     for (final SessionSummary summary in summaries) {

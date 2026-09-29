@@ -5,7 +5,7 @@ ChatSession _toChatSession(SessionRecord record, List<EntryRecord> entries) {
   return ChatSession(
     id: record.id,
     title: record.title,
-    group: _groupLabel(record.updatedAt),
+    group: _groupOf(record.updatedAt),
     time: _timeLabel(record.updatedAt),
     preview: record.preview.isEmpty ? '还没有消息' : record.preview,
     model: record.modelId,
@@ -188,18 +188,15 @@ String _titleFrom(String text) {
   return flat.length <= 16 ? flat : '${flat.substring(0, 16)}…';
 }
 
-String _groupLabel(DateTime updatedAt) {
+/// 分组由 [SessionGroup] 统一定义，这里只负责算"距今几天"。
+SessionGroup _groupOf(DateTime updatedAt) {
   final DateTime now = DateTime.now();
   final int days = DateTime(
     now.year,
     now.month,
     now.day,
   ).difference(DateTime(updatedAt.year, updatedAt.month, updatedAt.day)).inDays;
-  if (days <= 0) return '今天';
-  if (days == 1) return '昨天';
-  if (days < 7) return '过去 7 天';
-  if (days < 30) return '过去 30 天';
-  return '更早';
+  return SessionGroup.fromDays(days);
 }
 
 String _timeLabel(DateTime dt) {

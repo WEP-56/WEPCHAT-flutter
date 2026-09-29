@@ -7,7 +7,7 @@ import '../../models/workspace.dart';
 const ChatSession kChecklistSession = ChatSession(
   id: 's4',
   title: '露营装备清单页面',
-  group: '昨天',
+  group: SessionGroup.yesterday,
   time: '20:12',
   preview: '单页清单已生成，样式拆到 checklist_style.css',
   model: 'GPT-5',
@@ -73,7 +73,7 @@ const ChatSession kChecklistSession = ChatSession(
 const ChatSession kManualSession = ChatSession(
   id: 's5',
   title: '德语说明书翻译',
-  group: '本周',
+  group: SessionGroup.pastWeek,
   time: '周三 16:40',
   preview: '已翻译前 8 页，术语表放在文末',
   model: 'Claude Sonnet 4.5',

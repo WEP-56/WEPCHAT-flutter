@@ -21,9 +21,14 @@ sealed class DbRequest {
 }
 
 class ListSessionSummariesRequest extends DbRequest {
-  const ListSessionSummariesRequest(super.id, {this.limit = 200});
+  const ListSessionSummariesRequest(
+    super.id, {
+    required this.limit,
+    this.offset = 0,
+  });
 
   final int limit;
+  final int offset;
 }
 
 class FindSessionRequest extends DbRequest {

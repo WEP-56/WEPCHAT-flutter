@@ -12,6 +12,3 @@ const List<ChatSession> kMockSessions = <ChatSession>[
   kChecklistSession,
   kManualSession,
 ];
-
-/// 会话列表分组顺序。未列出的分组排在最后。
-const List<String> kSessionGroupOrder = <String>['今天', '昨天', '本周', '更早'];

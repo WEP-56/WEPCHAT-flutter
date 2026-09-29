@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../app/app_nav.dart';
 import '../../core/errors.dart';
-import '../../mock/mock_sessions.dart';
 import '../../models/chat.dart';
 import '../../state/app_scope.dart';
 import '../../state/session_store.dart';
@@ -201,7 +200,8 @@ class _SessionListPanelState extends State<SessionListPanel> {
     }
 
     final List<Widget> children = <Widget>[];
-    for (final String group in kSessionGroupOrder) {
+    // 遍历 SessionGroup.values：分组的权威定义只有这一份，列表不可能漏组。
+    for (final SessionGroup group in SessionGroup.values) {
       final List<ChatSession> inGroup = matched
           .where((ChatSession s) => s.group == group)
           .toList();
@@ -209,7 +209,7 @@ class _SessionListPanelState extends State<SessionListPanel> {
       children.add(
         Padding(
           padding: const EdgeInsets.fromLTRB(14, 10, 14, 6),
-          child: SectionLabel(group),
+          child: SectionLabel(group.label),
         ),
       );
       for (final ChatSession session in inGroup) {

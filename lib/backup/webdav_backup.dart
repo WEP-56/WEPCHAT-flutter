@@ -92,9 +92,9 @@ class WebDavBackupService {
         ],
       }),
     );
-    final List<SessionSummary> sessions = await storage.listSessions(
-      limit: 1000,
-    );
+    // 备份必须导全：`limit: 1000` 那种写法会让第 1001 个会话之后的记录
+    // 悄悄不进备份，而备份正是用户以为"数据都在"的那份东西。
+    final List<SessionSummary> sessions = await storage.listAllSessions();
     final List<Map<String, Object?>> exported = <Map<String, Object?>>[];
     for (final SessionSummary summary in sessions) {
       final SessionRecord? record = await storage.findSession(summary.id);

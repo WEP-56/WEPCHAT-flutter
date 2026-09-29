@@ -7,7 +7,7 @@ import '../../models/workspace.dart';
 const ChatSession kSalesSession = ChatSession(
   id: 's1',
   title: 'Q2 销售数据汇总脚本',
-  group: '今天',
+  group: SessionGroup.today,
   time: '14:32',
   preview: '已按区域汇总 2026 Q2 数据，脚本结果写入工作区',
   model: 'GPT-5',

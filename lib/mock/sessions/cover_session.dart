@@ -7,7 +7,7 @@ import '../../models/workspace.dart';
 const ChatSession kCoverSession = ChatSession(
   id: 's3',
   title: '公众号封面：清晨咖啡店',
-  group: '今天',
+  group: SessionGroup.today,
   time: '09:52',
   preview: '第二版把光线调暖，杯子右移，已存入工作区',
   model: 'Gemini 2.5 Pro',

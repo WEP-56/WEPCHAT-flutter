@@ -57,8 +57,8 @@ class DbWorker {
   /// 分派一个请求。返回值直接进 [DbSuccess]。
   Object? handle(DbRequest request) {
     switch (request) {
-      case ListSessionSummariesRequest(:final int limit):
-        return _sessions.listSummaries(limit: limit);
+      case ListSessionSummariesRequest(:final int limit, :final int offset):
+        return _sessions.listSummaries(limit: limit, offset: offset);
 
       case FindSessionRequest(:final String sessionId):
         return _sessions.findById(sessionId);

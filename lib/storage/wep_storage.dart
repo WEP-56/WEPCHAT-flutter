@@ -32,11 +32,38 @@ class WepStorage {
 
   // ---- 会话 ----
 
-  /// 会话列表。只读元信息，不读 payload。
-  Future<List<SessionSummary>> listSessions({int limit = 200}) {
+  /// 会话列表的一页。只读元信息，不读 payload。
+  ///
+  /// 两个参数都没有默认值：截断必须是调用方显式选择的，不能是没传参就默默少
+  /// 掉一截。要完整列表用 [listAllSessions]。
+  Future<List<SessionSummary>> listSessions({
+    required int limit,
+    int offset = 0,
+  }) {
     return _isolate.send<List<SessionSummary>>(
-      (int id) => ListSessionSummariesRequest(id, limit: limit),
+      (int id) => ListSessionSummariesRequest(id, limit: limit, offset: offset),
     );
+  }
+
+  /// 读出全部会话元信息，按更新时间倒序。
+  ///
+  /// 侧边栏和备份都需要"一条不漏"，分页循环只在这里实现一次（AGENTS.md §1.2）。
+  /// 早先只有单页查询、默认上限 200，超过的部分从侧边栏静默消失，而库里数据
+  /// 完好——用户看到的是列表变短，没有任何错误可查。
+  ///
+  /// 一次调用内不保证是数据库的同一个快照：翻页期间有新会话写入时，边界可能
+  /// 前后错开一行。两个调用方（启动装载、导出备份）都在用户不能并发建会话的
+  /// 时机跑，所以不做额外的一致性处理。
+  Future<List<SessionSummary>> listAllSessions() async {
+    final List<SessionSummary> all = <SessionSummary>[];
+    while (true) {
+      final List<SessionSummary> page = await listSessions(
+        limit: _kSessionPageSize,
+        offset: all.length,
+      );
+      all.addAll(page);
+      if (page.length < _kSessionPageSize) return all;
+    }
   }
 
   Future<SessionRecord?> findSession(String sessionId) {
@@ -275,3 +302,9 @@ class WepStorage {
 
   Future<void> close() => _isolate.close();
 }
+
+/// [WepStorage.listAllSessions] 每页读多少条元信息。
+///
+/// 只影响每次 isolate 往返的大小，不影响最终能读到多少会话——它跟会话总数
+/// 无关，所以不是"上限 200 个会话"那种意思。
+const int _kSessionPageSize = 200;
